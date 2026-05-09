@@ -22,13 +22,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Swagger UI: http://localhost:8000/docs  
 Health check: http://localhost:8000/health
 
-## Supabase Kurulumu
-
-1. [supabase.com](https://supabase.com) üzerinde yeni proje oluştur (Frankfurt region)
-2. `supabase_schema.sql` dosyasını SQL Editor'e yapıştır ve çalıştır
-3. Project Settings > API'den URL ve key'leri kopyala
-4. `.env` dosyasına yapıştır
-
 ## Veritabanı Seed
 
 ```bash
