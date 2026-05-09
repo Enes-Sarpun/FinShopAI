@@ -19,10 +19,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes buraya eklenecek
-# from app.api.routes import auth, personality, budget, chat, products
+from app.api.routes import personality
+app.include_router(personality.router, prefix="/api/personality", tags=["personality"])
+
+# Diğer route'lar agent'lar tamamlandıkça eklenecek
+# from app.api.routes import auth, budget, chat, products
 # app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-# app.include_router(personality.router, prefix="/api/personality", tags=["personality"])
 # app.include_router(budget.router, prefix="/api/budget", tags=["budget"])
 # app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 # app.include_router(products.router, prefix="/api/products", tags=["products"])
