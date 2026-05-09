@@ -6,7 +6,7 @@
 
 
 
-*Kurallar ile ilgili ekran görüntüsünde gösterilmiştir.*
+*Kurallar ilgili ekran görüntüsünde gösterilmiştir.*
 
 ![Kurallar](https://github.com/Enes-Sarpun/NotWork-2026/blob/Dev/Images/Kurallar.jpeg)
 
