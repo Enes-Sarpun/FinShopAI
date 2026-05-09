@@ -1,4 +1,5 @@
 *Yarışma teması Finans ve E-Ticaret odaklı uygulamalar olacaktır, Gerekli örnekler ekran görüntüsü altında gösterilmiştir.*
+
 ![Tema](https://github.com/Enes-Sarpun/NotWork-2026/blob/Dev/Images/Konsept.jpeg)
 
 
@@ -7,12 +8,7 @@
 
 *Kurallar ile ilgili ekran görüntüsünde gösterilmiştir.*
 
-
-
-
-
-
-
+![Kurallar](https://github.com/Enes-Sarpun/NotWork-2026/blob/Dev/Images/Kurallar.jpeg)
 
 
 *Değerlendirme kriterleri aşağıda gösterilmiştir.*
@@ -29,3 +25,4 @@
 
 *Yarışma Sonu Ürün Teslimi ile ilgili gerekli bilgiler ise aşağıda ekran görüntüsü üzerinde gösterilmiştir.*
 
+![Yarışma Sonu Ürün Teslimi](https://github.com/Enes-Sarpun/NotWork-2026/blob/Dev/Images/Yar%C4%B1%C5%9Fma%20sonu%20%C3%BCr%C3%BCn%20teslimi.jpeg)
