@@ -18,7 +18,7 @@
 
 *Değerlendirme kriterleri aşağıda gösterilmiştir.*
 
-**20 Puan - Kullanıcı Değeri: Ürün gerçekten uygulanabilir mi ve tüketicilerin problemlerini çözer mi?**
+**20 Puan - Kullanıcı Değeri: Ürün gerçekten uygulanabilir mi ve tüketicilerin problemlerini çözer mi?/t**
 **20 Puan - Teknik Puan: Projede uygun algoritmalar kullanılmış mı?**
 **10 Puan - Performans ve Doğruluk: Üretken yapay zeka çıktıları doğru, alakalı ve verimli mi?**
 **10 Puan - Agentic Yapılar: Üretken yapay zeka içinde agentic yapılar var mı? Doğru uygulamalar yapılmış mı?**
