@@ -4,6 +4,7 @@ from app.services.supabase_service import SupabaseService
 from app.core.config import settings
 from serpapi import GoogleSearch
 import urllib.parse
+from app.prompts.search_prompts import SEARCH_QUERY_PROMPT
 from app.prompts.review_prompts import REVIEW_ANALYSIS_PROMPT
 
 
@@ -18,7 +19,18 @@ class SearchAgent(BaseAgent):
 
         self.logger.info(f"Arama başladı: {query}")
 
-        # 1. SerpAPI ile Google Shopping'den ürün çek
+        # 1. LLM ile sorguyu parse et
+        try:
+            parsed = await self.call_llm_json(
+                SEARCH_QUERY_PROMPT.format(query=query)
+            )
+            if not budget and parsed.get("max_price"):
+                budget = parsed.get("max_price")
+        except Exception as e:
+            self.logger.error(f"Sorgu parse hatası: {e}")
+            parsed = {}
+
+        # 2. SerpAPI ile Google Shopping'den ürün çek
         products = await self._search_google_shopping(query, budget)
 
         # 2. Her ürün için LLM ile öneri nedeni üret
@@ -32,6 +44,8 @@ class SearchAgent(BaseAgent):
 
         return {
             "query": query,
+            "category": parsed.get("category", ""),
+            "gift_context": parsed.get("gift_context", False),
             "total_found": len(products),
             "products": products
         }
