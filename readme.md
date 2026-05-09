@@ -1,6 +1,5 @@
 *Yarışma teması Finans ve E-Ticaret odaklı uygulamalar olacaktır, Gerekli örnekler ekran görüntüsü altında gösterilmiştir.*
-
-
+![Tema](https://github.com/Enes-Sarpun/NotWork-2026/blob/Dev/Images/Konsept.jpeg)
 
 
 
