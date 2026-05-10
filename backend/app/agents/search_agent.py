@@ -1,3 +1,4 @@
+import asyncio
 from app.agents.base_agent import BaseAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
@@ -30,8 +31,8 @@ class SearchAgent(BaseAgent):
             self.logger.error(f"Sorgu parse hatası: {e}")
             parsed = {}
 
-        # 2. SerpAPI ile Google Shopping'den ürün çek
-        products = await self._search_google_shopping(query, budget)
+        # 2. SerpAPI ile Google Shopping'den ürün çek (senkron → thread'de çalıştır)
+        products = await asyncio.to_thread(self._search_google_shopping_sync, query, budget)
 
         # 2. Her ürün için LLM ile öneri nedeni üret
         for product in products[:3]:
@@ -50,7 +51,7 @@ class SearchAgent(BaseAgent):
             "products": products
         }
 
-    async def _search_google_shopping(self, query: str, budget: float = None) -> list:
+    def _search_google_shopping_sync(self, query: str, budget: float = None) -> list:
         try:
             search_query = query
             if budget:
