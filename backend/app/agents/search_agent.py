@@ -21,20 +21,44 @@ class SearchAgent(BaseAgent):
         self.logger.info(f"Arama başladı: {query}")
 
         # 1. LLM ile sorguyu parse et
+        llm_parse_ok = False
         try:
             parsed = await self.call_llm_json(
                 SEARCH_QUERY_PROMPT.format(query=query)
             )
             if not budget and parsed.get("max_price"):
                 budget = parsed.get("max_price")
+            self.logger.info(f"Parsed query: {parsed}")
+            llm_parse_ok = True
         except Exception as e:
-            self.logger.error(f"Sorgu parse hatası: {e}")
+            self.logger.error(f"Sorgu parse hatası (LLM fallback aktif): {e}")
             parsed = {}
 
-        # 2. SerpAPI ile Google Shopping'den ürün çek (senkron → thread'de çalıştır)
-        products = await asyncio.to_thread(self._search_google_shopping_sync, query, budget)
+        # 2. Arama sorgusunu LLM'in ürettiği tag'lerden oluştur
+        # LLM başarısız olduysa ham sorgudan anahtar kelime çıkar
+        tags = parsed.get("tags", [])
+        if tags:
+            search_query = " ".join(tags)
+        elif not llm_parse_ok:
+            # LLM rate limit veya hata — ham sorgudan ilk 5 kelimeyi al
+            words = query.split()
+            search_query = " ".join(words[:5]) if len(words) > 5 else query
+            self.logger.info(f"LLM fallback: kısaltılmış sorgu kullanılıyor")
+        else:
+            search_query = query
+        self.logger.info(f"Search query: {search_query} | budget: {budget}")
 
-        # 2. Her ürün için LLM ile öneri nedeni üret
+        # 3. SerpAPI ile Google Shopping'den ürün çek (senkron → thread'de çalıştır)
+        products = await asyncio.to_thread(self._search_google_shopping_sync, search_query, budget)
+
+        # Sonuç boşsa ve LLM parse başarılıysa kısa tag'lerle tekrar dene
+        if not products and tags and search_query != query:
+            self.logger.info("Tag sorgusu sonuç vermedi, ham sorgu ile tekrar deneniyor")
+            fallback_words = query.split()
+            fallback_query = " ".join(fallback_words[:5]) if len(fallback_words) > 5 else query
+            products = await asyncio.to_thread(self._search_google_shopping_sync, fallback_query, budget)
+
+        # 4. Her ürün için LLM ile öneri nedeni üret
         for product in products[:3]:
             reason = await self._generate_reason(product)
             product["recommendation_reason"] = reason
@@ -129,7 +153,14 @@ class SearchAgent(BaseAgent):
             return await self.call_llm(prompt)
         except Exception as e:
             self.logger.error(f"LLM öneri hatası: {e}")
-            return ""
+            # LLM başarısız olduğunda fiyat bazlı statik fallback
+            price = product.get("price", 0)
+            seller = product.get("seller", "")
+            name = product.get("name", "")
+            return (
+                f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
+                f"Bütçenize uygun bu ürün, kaliteli bir seçenek olarak öne çıkmaktadır."
+            )
 
     async def _save_to_supabase(self, user_id: str, query: str, products: list):
         try:

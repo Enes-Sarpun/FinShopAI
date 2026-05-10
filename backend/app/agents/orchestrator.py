@@ -92,9 +92,11 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
 
         result = await agent.execute({
             "query": state["message"],
-            "budget": available,
-            "user_id": state["user_id"]
+            "budget": None,  # Bütçe LLM tarafından mesajdan parse edilecek
+            "user_id": state["user_id"],
+            "max_budget": available  # Bilgi amaçlı, filtreleme için değil
         })
+        logger.info(f"[search] total_found={result.get('total_found')} products_len={len(result.get('products', []))}")
         return {
             **state,
             "search": result,
