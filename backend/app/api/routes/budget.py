@@ -11,7 +11,7 @@ POST /api/budget/expense             - Harcama ekle
 POST /api/budget/affordability       - Uygunluk kontrol et
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.agents.budget_agent import BudgetAgent
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
@@ -20,6 +20,7 @@ from app.models.budget import (
     ExpenseRequest,
     AffordabilityRequest
 )
+from app.core.security import get_current_user
 
 router = APIRouter(tags=["budget"])
 
@@ -34,7 +35,7 @@ def get_agent():
 # ==================== ENDPOINT'LER ====================
 
 @router.post("/create")
-async def create_budget(request: BudgetCreateRequest):
+async def create_budget(request: BudgetCreateRequest, current_user: dict = Depends(get_current_user)):
     """
     Bütçe oluştur ve analiz et.
 
@@ -97,7 +98,7 @@ async def create_budget(request: BudgetCreateRequest):
 
 
 @router.get("/{user_id}")
-async def get_budget(user_id: str):
+async def get_budget(user_id: str, current_user: dict = Depends(get_current_user)):
     """
     Kullanıcının bütçesini getir.
 
@@ -127,7 +128,7 @@ async def get_budget(user_id: str):
 
 
 @router.get("/{user_id}/analysis")
-async def get_budget_analysis(user_id: str):
+async def get_budget_analysis(user_id: str, current_user: dict = Depends(get_current_user)):
     """
     Kullanıcının bütçe analizini getir.
 
@@ -158,7 +159,7 @@ async def get_budget_analysis(user_id: str):
 
 
 @router.post("/expense")
-async def add_expense(request: ExpenseRequest):
+async def add_expense(request: ExpenseRequest, current_user: dict = Depends(get_current_user)):
     """
     Harcama ekle.
 
@@ -202,7 +203,7 @@ async def add_expense(request: ExpenseRequest):
 
 
 @router.post("/affordability")
-async def check_affordability(request: AffordabilityRequest):
+async def check_affordability(request: AffordabilityRequest, current_user: dict = Depends(get_current_user)):
     """
     Harcama uygunluğunu kontrol et.
 

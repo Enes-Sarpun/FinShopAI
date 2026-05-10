@@ -524,7 +524,7 @@ class BudgetAgent(BaseAgent):
                 "💡 Alışveriş öncesi liste yapın"
             ]
         
-        elif spending_type == "balanced":
+        elif spending_type == "dengeli":
             rec_savings = available * 0.2
             tips = [
                 "✓ Dengelenmiş harcama alışkanlığınız iyi",
