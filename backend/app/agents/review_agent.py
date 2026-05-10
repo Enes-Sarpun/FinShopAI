@@ -1,7 +1,6 @@
 from app.agents.base_agent import BaseAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
-from app.core.config import settings
 from app.prompts.review_prompts import REVIEW_SENTIMENT_PROMPT, REVIEW_SEARCH_PROMPT
 
 class ReviewAgent(BaseAgent):
@@ -37,7 +36,7 @@ class ReviewAgent(BaseAgent):
         }
 
     async def _get_reviews(self, product_id: str, product_name: str, price: float, seller: str, rating: float) -> list:
-        # Önce Supabase'de ara
+        # 1. Supabase cache'de ara
         if product_id:
             try:
                 result = self.db.client \
@@ -46,11 +45,12 @@ class ReviewAgent(BaseAgent):
                     .eq("product_id", product_id) \
                     .execute()
                 if result.data:
+                    self.logger.info(f"Supabase cache'den {len(result.data)} yorum bulundu")
                     return result.data
             except Exception as e:
                 self.logger.error(f"DB yorum hatası: {e}")
 
-        # Yoksa LLM ile üret
+        # 2. LLM ile ürüne özgü yorum üret
         return await self._generate_reviews(product_name, price, seller, rating)
 
     async def _generate_reviews(self, product_name: str, price: float = 0, seller: str = "", rating: float = 0) -> list:

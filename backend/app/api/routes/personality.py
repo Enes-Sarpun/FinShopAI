@@ -54,6 +54,19 @@ async def submit_answers(
     return result
 
 
+@router.get("/history")
+async def get_personality_history(current_user: dict = Depends(get_current_user)):
+    """Kullanıcının tüm karakter testi geçmişini döner (en yeniden eskiye)."""
+    user_id = current_user["sub"]
+    db = SupabaseService()
+    history = await db.get_personality_history(user_id)
+    return {
+        "user_id": user_id,
+        "count": len(history),
+        "history": history
+    }
+
+
 @router.get("/{user_id}", response_model=PersonalityResponse)
 async def get_personality(
     user_id: str,

@@ -109,6 +109,13 @@ class SearchAgent(BaseAgent):
                 if budget and price > budget:
                     continue
 
+                # SerpAPI Google Shopping'de product_id "product_id" veya
+                # link içindeki "product" parametresinden gelir
+                serpapi_product_id = (
+                    item.get("product_id")
+                    or item.get("serpapi_product_api_properties", {}).get("product_id")
+                )
+
                 products.append({
                     "name": item.get("title", ""),
                     "price": price,
@@ -117,7 +124,8 @@ class SearchAgent(BaseAgent):
                     "description": item.get("snippet", ""),
                     "url": self._generate_url(item.get("title", ""), item.get("source", "")),
                     "image_url": item.get("thumbnail", ""),
-                    "recommendation_reason": ""
+                    "recommendation_reason": "",
+                    "serpapi_product_id": serpapi_product_id  # Review Agent bunu kullanacak
                 })
 
             return products

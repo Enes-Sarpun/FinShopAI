@@ -27,6 +27,9 @@ class OrchestratorState(TypedDict):
     reviews: Optional[list]
     recommendation: Optional[dict]
 
+    # Conversation context
+    chat_history: Optional[list]
+
     # Kontrol
     error: Optional[str]
     steps_completed: list
@@ -41,19 +44,21 @@ def _services():
 
 
 async def node_personality(state: OrchestratorState) -> OrchestratorState:
-    """Kullanıcının personality profilini Supabase'den çeker."""
+    """Kullanıcının personality profilini ve chat geçmişini Supabase'den çeker."""
     logger.info(f"[personality] user_id={state['user_id']}")
     try:
         _, db = _services()
         profile = await db.get_personality(state["user_id"])
+        history = await db.get_chat_history(state["user_id"], limit=5)
         return {
             **state,
             "personality": profile,
+            "chat_history": history,
             "steps_completed": state["steps_completed"] + ["personality"]
         }
     except Exception as e:
         logger.error(f"[personality] error: {e}")
-        return {**state, "personality": None, "error": str(e)}
+        return {**state, "personality": None, "chat_history": [], "error": str(e)}
 
 
 async def node_budget(state: OrchestratorState) -> OrchestratorState:
@@ -90,11 +95,19 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
             available = budget_data.get("financial_metrics", {}).get("spendable_after_savings")
         logger.info(f"[search] available_budget={available}")
 
+        # Son 5 chat geçmişinden önceki arama konularını çıkar
+        history = state.get("chat_history") or []
+        previous_queries = [
+            h.get("message", "") for h in history
+            if h.get("role") == "user" and h.get("message") != state["message"]
+        ][:3]
+
         result = await agent.execute({
             "query": state["message"],
             "budget": None,  # Bütçe LLM tarafından mesajdan parse edilecek
             "user_id": state["user_id"],
-            "max_budget": available  # Bilgi amaçlı, filtreleme için değil
+            "max_budget": available,  # Bilgi amaçlı, filtreleme için değil
+            "previous_queries": previous_queries
         })
         logger.info(f"[search] total_found={result.get('total_found')} products_len={len(result.get('products', []))}")
         return {
@@ -219,6 +232,7 @@ async def run_orchestrator(user_id: str, message: str) -> dict:
         "search": None,
         "reviews": None,
         "recommendation": None,
+        "chat_history": None,
         "error": None,
         "steps_completed": []
     }

@@ -85,3 +85,24 @@ class SupabaseService:
     async def save_recommendation(self, data: dict) -> dict:
         result = self.client.table("product_recommendations").insert(data).execute()
         return result.data[0]
+
+    async def get_chat_history(self, user_id: str, limit: int = 20) -> list:
+        result = (
+            self.client.table("chat_history")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
+    async def get_personality_history(self, user_id: str) -> list:
+        result = (
+            self.client.table("personality_profiles")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return result.data or []
