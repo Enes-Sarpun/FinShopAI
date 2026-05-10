@@ -88,6 +88,7 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
         available = None
         if budget_data.get("success"):
             available = budget_data.get("financial_metrics", {}).get("spendable_after_savings")
+        logger.info(f"[search] available_budget={available}")
 
         result = await agent.execute({
             "query": state["message"],
