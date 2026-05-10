@@ -5,6 +5,7 @@ from app.agents.personality_agent import PersonalityAgent
 from app.agents.budget_agent import BudgetAgent
 from app.agents.search_agent import SearchAgent
 from app.agents.review_agent import ReviewAgent
+from app.agents.recommendation_agent import RecommendationAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from app.core.logger import get_logger
@@ -151,32 +152,22 @@ async def node_review(state: OrchestratorState) -> OrchestratorState:
 
 
 async def node_recommendation(state: OrchestratorState) -> OrchestratorState:
-    """
-    Recommendation Agent buraya bağlanacak.
-    Şimdilik search + review çıktısını direkt döner.
-    """
-    logger.info("[recommendation] placeholder — RecommendationAgent bağlanacak")
+    """RecommendationAgent ile kişiselleştirilmiş öneri üretir."""
+    logger.info("[recommendation] running RecommendationAgent")
     try:
-        # TODO: RecommendationAgent entegre edilince burası güncellenecek
-        # from app.agents.recommendation_agent import RecommendationAgent
-        # llm, db = _services()
-        # agent = RecommendationAgent(llm=llm, db=db)
-        # result = await agent.execute({...})
+        llm, db = _services()
+        agent = RecommendationAgent(llm=llm, db=db)
 
-        reviews = state.get("reviews") or []
-        personality = state.get("personality") or {}
-        spending_type = personality.get("spending_type", "dengeli")
-
-        recommendation = {
-            "spending_type": spending_type,
-            "top_products": reviews[:3],
-            "message": f"{spending_type.capitalize()} profili için öneriler hazırlandı.",
-            "note": "RecommendationAgent entegre edilince bu alan güncellenecek"
-        }
+        result = await agent.execute({
+            "message": state["message"],
+            "personality": state.get("personality"),
+            "budget": state.get("budget"),
+            "products": state.get("reviews") or []
+        })
 
         return {
             **state,
-            "recommendation": recommendation,
+            "recommendation": result,
             "steps_completed": state["steps_completed"] + ["recommendation"]
         }
     except Exception as e:
