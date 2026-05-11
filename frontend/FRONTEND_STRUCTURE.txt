@@ -1,0 +1,155 @@
+===================================================
+  FINSHOP AI - FRONTEND YAPI DOKUMANI
+  Next.js 14 App Router + TypeScript + Tailwind CSS
+===================================================
+
+KLASOR YAPISI
+-------------
+
+frontend/
+|
+|-- app/                          # Next.js App Router sayfalar
+|   |
+|   |-- page.tsx                  # Ana sayfa → /login'e yonlendirir
+|   |-- layout.tsx                # Kök layout (tum sayfalar icin)
+|   |-- globals.css               # Global stiller + Tailwind
+|   |
+|   |-- login/
+|   |   └── page.tsx              # Giris sayfasi → /login
+|   |
+|   |-- register/
+|   |   └── page.tsx              # Kayit sayfasi → /register
+|   |
+|   |-- onboarding/
+|   |   |-- budget/
+|   |   |   └── page.tsx          # Butce girisi → /onboarding/budget
+|   |   └── personality/
+|   |       └── page.tsx          # Kisilik testi (10 soru) → /onboarding/personality
+|   |
+|   |-- dashboard/
+|   |   |-- page.tsx              # Ana dashboard → /dashboard
+|   |   └── components/           # Dashboard alt componentler (takim gelistirmesi icin)
+|   |       |-- Navbar.tsx        #  Ust navigasyon cubugu
+|   |       |-- BudgetCards.tsx   #  Butce ozet kartlari + saglik bar
+|   |       |-- SavingsTips.tsx   #  Tasarruf onerileri + kisilik profili
+|   |       └── QuickActions.tsx  #  Hizli erisim butonlari
+|   |
+|   └── chat/
+|       |-- page.tsx              # Alisveris asistani → /chat
+|       └── history/
+|           └── page.tsx          # Gecmis aramalar → /chat/history
+|
+|-- lib/
+|   |-- api.ts                    # Tum backend API cagirilari (authApi, budgetApi, personalityApi, chatApi)
+|   └── utils.ts                  # Yardimci fonksiyonlar (formatPrice, getBudgetStatusColor, vb.)
+|
+|-- hooks/
+|   └── useAuth.ts                # Auth hook: userId, loading durumu + oturum kontrolu
+|
+|-- types/
+|   └── index.ts                  # TypeScript type tanimlari (Budget, Personality, ChatMessage, vb.)
+|
+|-- components/
+|   └── ui/                       # Paylasilan UI componentler (henuz bos, gelecek gelistirmeler icin)
+|
+|-- .env.local                    # Ortam degiskenleri (gitignore'da - her bilgisayarda ayri olusturulur)
+|-- .env.example                  # .env.local ornegi (gitignore'da degil, ornek olarak paylasiliyor)
+|-- next.config.js                # Next.js konfigurasyonu
+|-- tailwind.config.ts            # Tailwind CSS ayarlari
+|-- tsconfig.json                 # TypeScript ayarlari
+|-- package.json                  # Bagimliliklar
+└── postcss.config.js             # PostCSS ayarlari
+
+
+===================================================
+SAYFA AKISI (KULLANICI YOLCULUGU)
+===================================================
+
+  /  →  /login  →  /register (yeni kullanici)
+                ↓
+         /onboarding/personality  (kisilik testi)
+                ↓
+         /onboarding/budget       (butce bilgisi)
+                ↓
+         /dashboard               (ana ekran)
+                ↓
+         /chat                    (alisveris asistani)
+                ↓
+         /chat/history            (gecmis aramalar)
+
+
+===================================================
+TAKIM GOREV DAGILIMI
+===================================================
+
+  Enes:
+    - frontend/app/dashboard/components/Navbar.tsx
+        * Logo/ikon ekle
+        * Kullanici adini goster
+        * Mobil hamburger menu
+    - frontend/app/dashboard/components/QuickActions.tsx
+        * Butonlara ikon ekle (lucide-react)
+        * Hover animasyonu
+
+  ARKADAS 1:
+    - frontend/app/dashboard/components/BudgetCards.tsx
+        * Kartlara ikon ekle (lucide-react)
+        * Progress bar animasyonu
+        * Gider oranina gore renk (yesil/sari/kirmizi)
+        * Tooltip ekle
+
+  ARKADAS 2:
+    - frontend/app/dashboard/components/SavingsTips.tsx
+        * Her oneri icin ikon
+        * Kisilik tipine gore renk (savruk=turuncu, dengeli=mavi, tutumlu=yesil)
+        * Accordion/expand ile onerileri goster
+        * Guçlu yonler + zayif yonler kartini tamamla
+
+
+===================================================
+KURULUM (YENI BILGISAYARDA)
+===================================================
+
+1. Repoyu klonla:
+   git clone <repo-url>
+   cd NotWork-2026/frontend
+
+2. .env.local dosyasini olustur (gitignore'da oldugu icin manuel):
+   echo NEXT_PUBLIC_API_URL=http://localhost:8000 > .env.local
+
+3. Bagimlilikları yukle:
+   npm install
+
+4. Gelistirme sunucusunu baslat:
+   npm run dev
+
+5. Tarayicida ac:
+   http://localhost:3000
+
+NOT: Frontend calisirken backend de ayakta olmali!
+   cd ../backend
+   pip install -r requirements.txt
+   uvicorn app.main:app --reload
+
+
+===================================================
+KULLANILAN TEKNOLOJILER
+===================================================
+
+  - Next.js 14.2.3     (App Router)
+  - TypeScript 5
+  - Tailwind CSS 3
+  - lucide-react       (ikonlar icin)
+  - React 18
+
+
+===================================================
+ONEMLI DOSYALAR
+===================================================
+
+  lib/api.ts        → Backend ile iletisim burada
+  hooks/useAuth.ts  → Her sayfada auth kontrolu icin kullanilir
+  types/index.ts    → Tum TypeScript type'lari burada tanimli
+  globals.css       → .card, .btn-primary, .btn-secondary class'lari burada
+
+
