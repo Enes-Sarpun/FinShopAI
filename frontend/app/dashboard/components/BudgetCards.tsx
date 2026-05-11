@@ -38,8 +38,24 @@ const item = {
 
 export default function BudgetCards({ budget }: BudgetCardsProps) {
   const metrics = budget.financial_metrics;
+  const [animatedWidth, setAnimatedWidth] = useState(0);
 
-  const cards = [
+  // Progress bar animasyonu için useEffect [GÖREV: ARKADAŞ 1]
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimatedWidth(Math.min(metrics.expense_ratio, 100));
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [metrics.expense_ratio]);
+
+  // Gider oranına göre dinamik renk belirleme [GÖREV: ARKADAŞ 1]
+  const getProgressColor = (ratio: number) => {
+    if (ratio < 50) return "bg-green-500";
+    if (ratio < 80) return "bg-yellow-500";
+    return "bg-red-500";
+  };
+
+    const cards = [
     {
       label: "Aylık Gelir",
       value: metrics.total_income,
