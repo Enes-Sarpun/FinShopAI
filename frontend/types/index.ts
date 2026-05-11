@@ -71,6 +71,8 @@ export interface Recommendation {
 
 export interface ChatResponse {
   message: string;
+  is_product_request: boolean;
+  reply?: string;
   steps_completed: string[];
   personality: Personality;
   budget_status: string;
