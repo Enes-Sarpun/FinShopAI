@@ -141,6 +141,35 @@ class PersonalityAgent(BaseAgent):
     def __init__(self, llm, db):
         super().__init__("personality_agent", llm, db)
 
+    def _rule_based_analysis(self, category: str, score: int) -> dict:
+        profiles = {
+            "tutumlu": {
+                "spending_type": "tutumlu",
+                "risk_score": 2, "impulsive_score": 1, "saving_score": 9, "research_score": 8,
+                "strengths": ["Güçlü tasarruf alışkanlığı", "Düşük impulsif harcama", "Uzun vadeli finansal planlama"],
+                "weaknesses": ["Kendine harcama yapmakta zorlanabilir", "Fırsatları kaçırabilir"],
+                "recommendations": "Tasarruf alışkanlıklarınız mükemmel. Birikimlerinizi yatırıma yönlendirmeyi düşünün.",
+                "personality_summary": "Finansal konularda oldukça tutumlu ve disiplinli bir profilsiniz.",
+            },
+            "dengeli": {
+                "spending_type": "dengeli",
+                "risk_score": 3, "impulsive_score": 2, "saving_score": 8, "research_score": 6,
+                "strengths": ["Dengeli harcama alışkanlığı", "Kontrollü birikim", "Finansal farkındalık"],
+                "weaknesses": ["Bütçe takibini daha sistematik hale getirebilir", "Büyük alışverişlerde daha fazla araştırma yapabilir"],
+                "recommendations": "Mevcut dengeli yaklaşımınızı koruyun. Aylık bütçe takibi ile daha iyi sonuçlar alabilirsiniz.",
+                "personality_summary": "Mali konularda dengeli, kontrollü ve bilinçli bir yaklaşım sergiliyorsunuz.",
+            },
+            "savruk": {
+                "spending_type": "savruk",
+                "risk_score": 7, "impulsive_score": 8, "saving_score": 3, "research_score": 3,
+                "strengths": ["Anlık kararlar alabilme", "Yaşamdan keyif alma"],
+                "weaknesses": ["Yüksek impulsif harcama", "Düşük tasarruf eğilimi", "Bütçe takibi eksikliği"],
+                "recommendations": "Aylık bütçe planı oluşturun ve harcamalarınızı kategorize edin. Otomatik birikim talimatı verin.",
+                "personality_summary": "Harcamalarınızda impulsif davranma eğiliminiz var. Bilinçli adımlarla bunu dengeleyebilirsiniz.",
+            },
+        }
+        return profiles.get(category, profiles["dengeli"])
+
     def get_questions(self) -> list:
         return [
             {
@@ -174,14 +203,18 @@ class PersonalityAgent(BaseAgent):
             readable_answers.append(f"S{q['id']}: {q['text']}\nCevap: {answer_text}")
         answers_text = "\n\n".join(readable_answers)
 
-        # 3. LLM analizi
-        prompt = PERSONALITY_ANALYSIS_PROMPT.format(
-            rule_score=rule_score,
-            category=category,
-            answers=answers_text,
-        )
-        analysis = await self.call_llm_json(prompt, system=PERSONALITY_SYSTEM)
-        self.log_action("LLM analysis complete")
+        # 3. LLM analizi (rate limit durumunda kural tabanlı fallback)
+        try:
+            prompt = PERSONALITY_ANALYSIS_PROMPT.format(
+                rule_score=rule_score,
+                category=category,
+                answers=answers_text,
+            )
+            analysis = await self.call_llm_json(prompt, system=PERSONALITY_SYSTEM)
+            self.log_action("LLM analysis complete")
+        except Exception as e:
+            self.log_action("LLM analysis failed, using rule-based fallback", {"error": str(e)})
+            analysis = self._rule_based_analysis(category, rule_score)
 
         # 4. DB'ye kaydet
         record = {
