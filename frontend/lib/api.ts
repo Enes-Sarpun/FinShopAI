@@ -107,4 +107,8 @@ export const chatApi = {
     }),
 
   getHistory: (limit = 20) => apiFetch(`/api/chat/history?limit=${limit}`),
+
+  getThread: (userMsgId: string) => apiFetch(`/api/chat/thread/${userMsgId}`),
+
+  deleteHistory: () => apiFetch("/api/chat/history", { method: "DELETE" }),
 };

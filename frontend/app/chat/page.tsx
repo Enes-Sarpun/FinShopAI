@@ -1,170 +1,426 @@
 "use client";
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { chatApi, authApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
+import { Send, Sparkles, ShoppingBag, Trash2 } from "lucide-react";
 import Image from "next/image";
+import Sidebar from "@/app/dashboard/components/Sidebar";
+
+function storageKey(id: string | null) {
+  return id ? `finshop_thread_${id}` : "finshop_thread_new";
+}
+
+type MsgRole = "user" | "bot" | "products";
+interface Msg {
+  role: MsgRole;
+  text?: string;
+  products?: Product[];
+  topPick?: { product_name: string; reason: string; value_score: number } | null;
+  advice?: string;
+  budgetStatus?: string;
+}
+
+const WELCOME: Msg[] = [
+  { role: "bot", text: "Merhaba! Bütçene uygun ürünler bulmana yardım edebilirim 🛍️" },
+  { role: "bot", text: "Ne aramak istersin? Örneğin: \"Anneme 1500 TL hediye öner\"" },
+];
+
+function loadFromStorage(key: string): Msg[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Msg[];
+    return parsed.length > 0 ? parsed : null;
+  } catch { return null; }
+}
+
+function saveToStorage(key: string, msgs: Msg[]) {
+  try { sessionStorage.setItem(key, JSON.stringify(msgs)); } catch {}
+}
+
+interface UserInfo { full_name?: string; email?: string; }
 
 export default function ChatPage() {
   const { loading } = useAuth();
-  const [message, setMessage] = useState("");
-  const [result, setResult] = useState<ChatResponse | null>(null);
+  const searchParams = useSearchParams();
+  const [messages, setMessages] = useState<Msg[]>(WELCOME);
+  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const activeThreadId = useRef<string | null>(null);
+  const paramHandled = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!message.trim()) return;
-    setError("");
+  useEffect(() => {
+    authApi.me().then((d) => setUser(d as UserInfo)).catch(() => {});
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || paramHandled.current) return;
+    paramHandled.current = true;
+
+    const loadId = searchParams.get("load");
+    const q = searchParams.get("q");
+
+    if (loadId) {
+      activeThreadId.current = loadId;
+      const key = storageKey(loadId);
+      const cached = loadFromStorage(key);
+      if (cached) { setMessages(cached); return; }
+
+      chatApi.getThread(loadId).then((d: unknown) => {
+        const data = d as { thread: { id: string; message: string; role: string; metadata?: Record<string, unknown> }[] };
+        const thread = data.thread || [];
+        if (thread.length === 0) return;
+
+        const restored: Msg[] = [];
+        for (const msg of thread) {
+          if (msg.role === "user") {
+            restored.push({ role: "user", text: msg.message });
+          } else if (msg.role === "assistant") {
+            const meta = msg.metadata || {};
+            if (meta.type === "products") {
+              const payload = meta.payload as {
+                affordability_message?: string;
+                summary?: string;
+                financial_advice?: string;
+                top_pick?: { product_name: string; reason: string; value_score: number } | null;
+                products?: Product[];
+                budget_status?: string;
+              };
+              if (payload?.affordability_message)
+                restored.push({ role: "bot", text: payload.affordability_message, budgetStatus: payload.budget_status });
+              if (payload?.summary)
+                restored.push({ role: "bot", text: payload.summary });
+              if (payload?.products?.length)
+                restored.push({ role: "products", products: payload.products, topPick: payload.top_pick ?? null, advice: payload.financial_advice ?? undefined });
+            } else {
+              restored.push({ role: "bot", text: msg.message });
+            }
+          }
+        }
+        if (restored.length > 0) {
+          setMessages(restored);
+          saveToStorage(key, restored);
+        }
+      }).catch(() => {});
+      return;
+    }
+
+    activeThreadId.current = null;
+    const cached = loadFromStorage(storageKey(null));
+    if (cached) setMessages(cached);
+    if (q) send(q);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !paramHandled.current) return;
+    saveToStorage(storageKey(activeThreadId.current), messages);
+  }, [messages, hydrated]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
+
+  function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send(input);
+    }
+  }
+
+  async function send(text: string) {
+    if (!text.trim() || sending) return;
+    setInput("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    setMessages((prev) => [...prev, { role: "user", text }]);
     setSending(true);
-    setResult(null);
+
     try {
-      const data = await chatApi.send(message) as ChatResponse;
-      setResult(data);
+      const data = await chatApi.send(text) as ChatResponse;
+
+      if (!data.is_product_request) {
+        setMessages((prev) => [...prev, {
+          role: "bot",
+          text: data.reply || "Başka bir konuda yardımcı olabilir miyim?",
+        }]);
+        return;
+      }
+
+      const newMsgs: Msg[] = [];
+      if (data.affordability_message)
+        newMsgs.push({ role: "bot", text: data.affordability_message, budgetStatus: data.budget_status });
+      if (data.recommendation?.summary)
+        newMsgs.push({ role: "bot", text: data.recommendation.summary });
+      if (data.products?.length > 0) {
+        newMsgs.push({ role: "products", products: data.products, topPick: data.recommendation?.top_pick ?? null, advice: data.recommendation?.financial_advice ?? undefined });
+      } else {
+        newMsgs.push({ role: "bot", text: "Ürün bulunamadı, farklı bir arama deneyin." });
+      }
+      setMessages((prev) => [...prev, ...newMsgs]);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Bir hata oluştu");
+      const msg = err instanceof Error ? err.message : "Bir hata oluştu.";
+      setMessages((prev) => [...prev, { role: "bot", text: `⚠️ ${msg}` }]);
     } finally {
       setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }
+
+  function clearChat() {
+    setMessages(WELCOME);
+    sessionStorage.removeItem(storageKey(activeThreadId.current));
+  }
+
+  async function deleteHistory() {
+    if (!confirm("Tüm geçmiş silinecek. Emin misin?")) return;
+    try {
+      await chatApi.deleteHistory();
+      Object.keys(sessionStorage)
+        .filter((k) => k.startsWith("finshop_thread_"))
+        .forEach((k) => sessionStorage.removeItem(k));
+      setMessages(WELCOME);
+      window.location.href = "/chat";
+    } catch {
+      alert("Geçmiş silinirken hata oluştu.");
     }
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg-mesh)" }}>
       <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
-      <nav className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-        <Link href="/dashboard" className="font-bold text-gray-900 text-lg">FinShop AI</Link>
-        <div className="flex items-center gap-4">
-          <Link href="/chat/history" className="text-sm text-gray-500 hover:text-gray-700">Geçmiş</Link>
-          <button onClick={authApi.logout} className="text-sm text-gray-500 hover:text-gray-700">Çıkış</button>
-        </div>
-      </nav>
+    <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg-mesh)" }}>
+      <Sidebar userName={user?.full_name} userEmail={user?.email} />
 
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        {/* Arama Kutusu */}
-        <div className="card">
-          <h1 className="text-lg font-semibold text-gray-800 mb-4">Alışveriş Asistanı</h1>
-          <form onSubmit={handleSend} className="flex gap-3">
-            <input
-              type="text"
-              className="input flex-1"
-              placeholder="Örn: Anneme 1500 TL mutfak hediyesi öner"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              disabled={sending}
-            />
-            <button type="submit" className="btn-primary px-6" disabled={sending || !message.trim()}>
-              {sending ? "..." : "Ara"}
+      <div className="flex flex-col flex-1 min-w-0">
+
+        {/* Üst bar — glassmorphism */}
+        <header className="flex items-center justify-between px-6 py-3 border-b border-white/60 dark:border-gray-700/60 flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.75)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">FinShop Asistanı</p>
+              <p className="text-xs text-emerald-500 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
+                Çevrimiçi
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={clearChat}
+              className="p-2 hover:bg-gray-100/80 dark:hover:bg-gray-700/50 rounded-xl transition-colors text-gray-400 hover:text-gray-600"
+              title="Bu sohbeti temizle">
+              <Trash2 className="w-4 h-4" />
             </button>
-          </form>
+            <button onClick={deleteHistory}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors border border-red-100 dark:border-red-900/40">
+              <Trash2 className="w-3.5 h-3.5" />
+              Geçmişi Sil
+            </button>
+          </div>
+        </header>
+
+        {/* Mesajlar */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+            <AnimatePresence initial={false}>
+              {messages.map((msg, i) => {
+                if (msg.role === "user") return <UserBubble key={i} text={msg.text!} />;
+                if (msg.role === "bot") return <BotBubble key={i} text={msg.text!} budgetStatus={msg.budgetStatus} />;
+                if (msg.role === "products") return (
+                  <ProductsMessage key={i} products={msg.products!} topPick={msg.topPick} advice={msg.advice} />
+                );
+                return null;
+              })}
+            </AnimatePresence>
+            {sending && <TypingIndicator />}
+            <div ref={bottomRef} />
+          </div>
         </div>
 
-        {/* Yükleniyor */}
-        {sending && (
-          <div className="card text-center py-10">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">Ürünler aranıyor, analiz yapılıyor...</p>
+        {/* Input — glassmorphism */}
+        <div className="border-t border-white/60 dark:border-gray-700/60 px-4 py-4 flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.75)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-end gap-3 bg-white/80 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-400 transition-all shadow-sm">
+              <textarea
+                ref={inputRef}
+                rows={1}
+                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 resize-none outline-none leading-relaxed"
+                placeholder="Bir şey sor... (Enter ile gönder)"
+                value={input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                disabled={sending}
+                style={{ height: "auto", minHeight: "24px" }}
+              />
+              <button onClick={() => send(input)} disabled={!input.trim() || sending}
+                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all flex-shrink-0 mb-0.5 shadow-sm active:scale-95">
+                <Send className="w-3.5 h-3.5 text-white" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 text-center mt-2">Shift+Enter ile satır ekle · Enter ile gönder</p>
           </div>
-        )}
-
-        {error && <div className="card border-red-200 bg-red-50"><p className="text-red-600 text-sm">{error}</p></div>}
-
-        {/* Sonuçlar */}
-        {result && !sending && (
-          <div className="space-y-4">
-            {/* Affordability */}
-            {result.affordability_message && (
-              <div className={`card border-l-4 ${
-                result.budget_status === "healthy" ? "border-green-500 bg-green-50" :
-                result.budget_status === "warning" ? "border-yellow-500 bg-yellow-50" :
-                "border-red-500 bg-red-50"
-              }`}>
-                <p className="text-sm font-medium">{result.affordability_message}</p>
-              </div>
-            )}
-
-            {/* Recommendation Summary */}
-            {result.recommendation?.summary && (
-              <div className="card">
-                <p className="text-sm text-gray-700">{result.recommendation.summary}</p>
-                {result.recommendation.financial_advice && (
-                  <p className="text-sm text-blue-600 mt-2 font-medium">{result.recommendation.financial_advice}</p>
-                )}
-              </div>
-            )}
-
-            {/* Top Pick */}
-            {result.recommendation?.top_pick && (
-              <div className="card border-2 border-blue-200 bg-blue-50">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">EN İYİ SEÇİM</span>
-                </div>
-                <p className="font-semibold text-gray-800">{result.recommendation.top_pick.product_name}</p>
-                <p className="text-sm text-gray-600 mt-1">{result.recommendation.top_pick.reason}</p>
-                <p className="text-xs text-blue-500 mt-2">Değer puanı: {result.recommendation.top_pick.value_score}/10</p>
-              </div>
-            )}
-
-            {/* Ürün Listesi */}
-            {result.products.length > 0 ? (
-              <div className="space-y-3">
-                <h2 className="font-semibold text-gray-800">Bulunan Ürünler ({result.products.length})</h2>
-                {result.products.map((product, i) => (
-                  <ProductCard key={i} product={product} />
-                ))}
-              </div>
-            ) : (
-              <div className="card text-center py-8">
-                <p className="text-gray-500">Ürün bulunamadı. Farklı bir arama deneyin.</p>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
+function UserBubble({ text }: { text: string }) {
+  return (
+    <motion.div
+      className="flex justify-end"
+      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      <div className="max-w-[75%] bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl rounded-br-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
+        {text}
+      </div>
+    </motion.div>
+  );
+}
+
+function BotBubble({ text, budgetStatus }: { text: string; budgetStatus?: string }) {
+  const accent =
+    budgetStatus === "healthy" ? "border-l-4 border-emerald-400 bg-emerald-50/80 dark:bg-emerald-900/20" :
+    budgetStatus === "warning"  ? "border-l-4 border-amber-400 bg-amber-50/80 dark:bg-amber-900/20" :
+    budgetStatus === "critical" ? "border-l-4 border-red-400 bg-red-50/80 dark:bg-red-900/20" : "";
+  return (
+    <motion.div
+      className="flex justify-start gap-3"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className={`max-w-[75%] rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed shadow-sm ${accent || "bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 text-gray-800 dark:text-gray-100"}`}
+        style={!accent ? { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" } : {}}>
+        {text}
+      </div>
+    </motion.div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <motion.div
+      className="flex justify-start gap-3"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className="bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1.5"
+        style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+        {[0, 150, 300].map((delay, i) => (
+          <span
+            key={i}
+            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+            style={{ animationDelay: `${delay}ms` }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function ProductsMessage({ products, topPick, advice }: {
+  products: Product[];
+  topPick?: { product_name: string; reason: string; value_score: number } | null;
+  advice?: string;
+}) {
+  return (
+    <motion.div
+      className="flex justify-start gap-3"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className="flex-1 max-w-[85%] space-y-3">
+        {advice && (
+          <div className="bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium shadow-sm"
+            style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+            {advice}
+          </div>
+        )}
+        {topPick && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border border-blue-200/60 dark:border-blue-700/40 rounded-2xl px-4 py-3 shadow-sm">
+            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded-full">EN İYİ SEÇİM</span>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-2">{topPick.product_name}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{topPick.reason}</p>
+            <p className="text-xs text-blue-500 mt-1 font-numeric">Değer puanı: {topPick.value_score}/10</p>
+          </div>
+        )}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 font-medium px-1">{products.length} ürün bulundu</p>
+          {products.map((product, i) => <ProductCard key={i} product={product} />)}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function ProductCard({ product }: { product: Product }) {
   return (
-    <div className="card flex gap-4">
-      {product.image_url && (
-        <div className="relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
-          <Image
-            src={product.image_url}
-            alt={product.name}
-            fill
-            className="object-cover"
-            unoptimized
-          />
+    <motion.a
+      href={product.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex gap-3 bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl p-3 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40 transition-all group"
+      style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.15 }}
+    >
+      {product.image_url ? (
+        <div className="relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
+          <Image src={product.image_url} alt={product.name} fill className="object-cover" unoptimized />
+        </div>
+      ) : (
+        <div className="w-16 h-16 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+          <ShoppingBag className="w-6 h-6 text-blue-400" />
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-800 text-sm leading-snug">{product.name}</p>
-        <p className="text-blue-600 font-bold mt-1">{formatPrice(product.price)}</p>
-        <p className="text-xs text-gray-500">{product.seller}</p>
-        {product.rating > 0 && (
-          <p className="text-xs text-yellow-600 mt-0.5">★ {product.rating}</p>
-        )}
+        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 leading-snug group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{product.name}</p>
+        <p className="text-base font-bold text-blue-600 dark:text-blue-400 mt-1 font-numeric">{formatPrice(product.price)}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className="text-xs text-gray-400">{product.seller}</p>
+          {product.rating > 0 && <p className="text-xs text-amber-500">★ {product.rating}</p>}
+        </div>
         {product.recommendation_reason && (
-          <p className="text-xs text-gray-500 mt-2 line-clamp-2">{product.recommendation_reason}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-1">{product.recommendation_reason}</p>
         )}
-        <a
-          href={product.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-2 text-xs text-blue-600 hover:underline"
-        >
-          Ürüne Git →
-        </a>
       </div>
-    </div>
+    </motion.a>
   );
 }

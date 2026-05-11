@@ -97,6 +97,40 @@ class SupabaseService:
         )
         return result.data or []
 
+    async def delete_chat_history(self, user_id: str) -> None:
+        self.client.table("chat_history").delete().eq("user_id", user_id).execute()
+
+    async def get_chat_thread(self, user_id: str, user_msg_id: str) -> list:
+        """Bir kullanıcı mesajı ve ona ait asistan cevabını döner."""
+        # Önce kullanıcı mesajını çek
+        user_msg = (
+            self.client.table("chat_history")
+            .select("*")
+            .eq("id", user_msg_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not user_msg.data:
+            return []
+
+        # Asistan cevabını metadata.user_msg_id ile bul
+        # Supabase JSON filter: metadata->user_msg_id = user_msg_id
+        assistant_msg = (
+            self.client.table("chat_history")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("role", "assistant")
+            .filter("metadata->>user_msg_id", "eq", user_msg_id)
+            .limit(1)
+            .execute()
+        )
+
+        result = list(user_msg.data)
+        if assistant_msg.data:
+            result.extend(assistant_msg.data)
+        return result
+
     async def get_personality_history(self, user_id: str) -> list:
         result = (
             self.client.table("personality_profiles")
