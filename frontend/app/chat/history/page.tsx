@@ -60,10 +60,16 @@ export default function HistoryPage() {
                           </p>
                         )}
                       </div>
-                      <Link href={`/chat?q=${encodeURIComponent(item.message)}`}
-                        className="text-xs text-blue-600 hover:underline flex-shrink-0">
-                        Tekrar Ara
-                      </Link>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <Link href={`/chat?load=${item.id}`}
+                          className="text-xs text-blue-600 hover:underline">
+                          Görüntüle
+                        </Link>
+                        <Link href={`/chat?q=${encodeURIComponent(item.message)}`}
+                          className="text-xs text-gray-400 hover:text-gray-600 hover:underline">
+                          Tekrar Ara
+                        </Link>
+                      </div>
                     </div>
                   ))}
                 </div>

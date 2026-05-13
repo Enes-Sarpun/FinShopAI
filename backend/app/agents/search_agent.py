@@ -59,8 +59,10 @@ class SearchAgent(BaseAgent):
             products = await asyncio.to_thread(self._search_google_shopping_sync, fallback_query, budget)
 
         # 4. Her ürün için LLM ile öneri nedeni üret
+        occasion = parsed.get("occasion") or ""
+        recipient = parsed.get("recipient") or ""
         for product in products[:3]:
-            reason = await self._generate_reason(product)
+            reason = await self._generate_reason(product, occasion, recipient)
             product["recommendation_reason"] = reason
 
         # 3. Supabase'e kaydet
@@ -71,6 +73,9 @@ class SearchAgent(BaseAgent):
             "query": query,
             "category": parsed.get("category", ""),
             "gift_context": parsed.get("gift_context", False),
+            "occasion": parsed.get("occasion", ""),
+            "recipient": parsed.get("recipient", ""),
+            "recipient_age_group": parsed.get("recipient_age_group", ""),
             "total_found": len(products),
             "products": products
         }
@@ -96,17 +101,38 @@ class SearchAgent(BaseAgent):
             for item in results.get("shopping_results", [])[:10]:
                 price_raw = item.get("price", "0")
                 try:
-                    price = float(
+                    cleaned = (
                         price_raw.replace("₺", "")
                         .replace("TL", "")
-                        .replace(".", "")
-                        .replace(",", ".")
+                        .replace("\xa0", "")
                         .strip()
                     )
-                except:
+                    # Türkçe format: "13.999,00" → binlik=nokta, ondalık=virgül
+                    # İngilizce format: "13,999.00" → binlik=virgül, ondalık=nokta
+                    if "," in cleaned and "." in cleaned:
+                        # Her iki sembol var — hangisi ondalık?
+                        if cleaned.rindex(".") > cleaned.rindex(","):
+                            # son sembol nokta → İngilizce format
+                            price = float(cleaned.replace(",", ""))
+                        else:
+                            # son sembol virgül → Türkçe format
+                            price = float(cleaned.replace(".", "").replace(",", "."))
+                    elif "," in cleaned:
+                        # Sadece virgül var → Türkçe ondalık ayraç
+                        price = float(cleaned.replace(",", "."))
+                    else:
+                        # Sadece nokta var (binlik ya da ondalık)
+                        # 3 haneli grupsa binlik, değilse ondalık
+                        parts = cleaned.split(".")
+                        if len(parts) == 2 and len(parts[1]) == 3:
+                            price = float(cleaned.replace(".", ""))
+                        else:
+                            price = float(cleaned)
+                except Exception:
                     price = 0
 
-                if budget and price > budget:
+                # Bütçeyi aşıyorsa veya parse edilemeden 0 kaldıysa atla
+                if budget and (price == 0 or price > float(budget)):
                     continue
 
                 # SerpAPI Google Shopping'de product_id "product_id" veya
@@ -151,23 +177,26 @@ class SearchAgent(BaseAgent):
         else:
             return f"https://www.google.com/search?q={encoded}+sat%C4%B1n+al"
 
-    async def _generate_reason(self, product: dict) -> str:
+    async def _generate_reason(self, product: dict, occasion: str = "", recipient: str = "") -> str:
         try:
             prompt = REVIEW_ANALYSIS_PROMPT.format(
                 product_name=product.get("name", ""),
                 price=product.get("price", ""),
-                source=product.get("seller", "")
+                source=product.get("seller", ""),
+                occasion=occasion or "belirtilmedi",
+                recipient=recipient or "belirtilmedi",
             )
             return await self.call_llm(prompt)
         except Exception as e:
             self.logger.error(f"LLM öneri hatası: {e}")
-            # LLM başarısız olduğunda fiyat bazlı statik fallback
             price = product.get("price", 0)
             seller = product.get("seller", "")
             name = product.get("name", "")
+            occasion_text = f"{occasion} için " if occasion else ""
+            recipient_text = f"{recipient}'a " if recipient else ""
             return (
                 f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
-                f"Bütçenize uygun bu ürün, kaliteli bir seçenek olarak öne çıkmaktadır."
+                f"{occasion_text}{recipient_text}bütçenize uygun kaliteli bir seçenek olarak öne çıkmaktadır."
             )
 
     async def _save_to_supabase(self, user_id: str, query: str, products: list):

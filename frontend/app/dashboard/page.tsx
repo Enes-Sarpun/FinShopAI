@@ -9,6 +9,8 @@ import Sidebar from "./components/Sidebar";
 import BudgetCards from "./components/BudgetCards";
 import SavingsTips from "./components/SavingsTips";
 import QuickActions from "./components/QuickActions";
+import DailyTip from "./components/DailyTip";
+import ChatPreview from "./components/ChatPreview";
 
 interface UserInfo { full_name?: string; email?: string; }
 
@@ -64,11 +66,11 @@ export default function DashboardPage() {
       <Sidebar userName={user?.full_name} userEmail={user?.email} />
 
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="max-w-6xl mx-auto px-6 py-8">
 
           {/* Karşılama başlığı */}
           <motion.div
-            className="mb-8"
+            className="mb-6"
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
@@ -81,6 +83,9 @@ export default function DashboardPage() {
               Finansal durumuna göz at, alışveriş için asistanı başlat.
             </p>
           </motion.div>
+
+          {/* Günlük ipucu banner */}
+          <DailyTip />
 
           {loading || fetching ? (
             <div className="space-y-6">
@@ -96,16 +101,33 @@ export default function DashboardPage() {
             </div>
           ) : budget ? (
             <div className="space-y-6">
+              {/* Bütçe kartları */}
               <BudgetCards budget={budget} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.4 }}
-                >
-                  <QuickActions />
-                </motion.div>
+
+              {/* Ana içerik grid — 3 sütun */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Sol kolon: profil + tasarruf ipuçları */}
+                <div className="lg:col-span-1 space-y-4">
+                  <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
+                </div>
+
+                {/* Orta + sağ kolon: chat + hızlı erişim */}
+                <div className="lg:col-span-2 space-y-4">
+                  <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15, duration: 0.4 }}
+                  >
+                    <ChatPreview />
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25, duration: 0.4 }}
+                  >
+                    <QuickActions />
+                  </motion.div>
+                </div>
               </div>
             </div>
           ) : (

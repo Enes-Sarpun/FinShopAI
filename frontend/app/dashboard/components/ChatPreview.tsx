@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
 
 const STORAGE_KEY = "finshop_chat_messages";
+const THREAD_KEY = "finshop_last_user_msg_id";
 
 const SUGGESTIONS = [
   "Anneme 1500 TL hediye öner 🎁",
@@ -51,11 +52,14 @@ export default function ChatPreview() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [lastMsgId, setLastMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // sessionStorage'dan yükle (client-side only)
+  // sessionStorage'dan yükle
   useEffect(() => {
     setMessages(loadMessages());
+    const saved = sessionStorage.getItem(THREAD_KEY);
+    if (saved) setLastMsgId(saved);
     setHydrated(true);
   }, []);
 
@@ -70,29 +74,30 @@ export default function ChatPreview() {
   async function send(text: string) {
     if (!text.trim() || loading) return;
     setInput("");
-    const userMsg: Msg = { role: "user", text };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, { role: "user", text }]);
     setLoading(true);
 
     try {
       const data = await chatApi.send(text) as ChatResponse;
 
-      // Sohbet modu — sadece reply göster
+      // Son user_msg_id'yi sakla — "Tam ekran"da kullanılacak
+      if (data.user_msg_id) {
+        setLastMsgId(data.user_msg_id);
+        sessionStorage.setItem(THREAD_KEY, data.user_msg_id);
+      }
+
       if (!data.is_product_request) {
         const reply = data.reply || "Başka bir konuda yardımcı olabilir miyim?";
         setMessages((prev) => [...prev, { role: "bot", text: reply }]);
         return;
       }
 
-      // Ürün arama modu
       if (data.affordability_message) {
         setMessages((prev) => [...prev, { role: "bot", text: data.affordability_message! }]);
       }
-
       if (data.recommendation?.summary) {
         setMessages((prev) => [...prev, { role: "bot", text: data.recommendation.summary }]);
       }
-
       if (data.products?.length > 0) {
         setMessages((prev) => [
           ...prev,
@@ -120,11 +125,16 @@ export default function ChatPreview() {
 
   function clearChat() {
     setMessages(WELCOME);
+    setLastMsgId(null);
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(THREAD_KEY);
   }
 
   const isWelcomeOnly = messages.length === WELCOME.length &&
     messages.every((m, i) => m.text === WELCOME[i]?.text);
+
+  // "Tam ekran" linki: konuşma varsa son mesajı yükle, yoksa boş chat
+  const fullscreenHref = lastMsgId ? `/chat?load=${lastMsgId}` : "/chat";
 
   return (
     <div className="card flex flex-col h-[600px] p-0 overflow-hidden">
@@ -151,7 +161,7 @@ export default function ChatPreview() {
             </button>
           )}
           <Link
-            href="/chat"
+            href={fullscreenHref}
             className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
           >
             Tam ekran <ExternalLink className="w-3 h-3" />

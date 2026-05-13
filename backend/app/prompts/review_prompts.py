@@ -56,12 +56,22 @@ SADECE JSON DÖNDÜR, BAŞKA AÇIKLAMA YAPMA.
 """
 
 REVIEW_ANALYSIS_PROMPT = """
-Aşağıdaki ürün bilgilerini analiz et ve kullanıcıya neden önerilmesi gerektiğini açıkla.
+Sen deneyimli bir alışveriş danışmanısın. Aşağıdaki ürün bilgilerini analiz ederek kullanıcıya neden önerilmesi gerektiğini açıkla.
 
 Ürün: {product_name}
-Fiyat: {price}
-Kaynak: {source}
+Fiyat: {price} TL
+Satıcı: {source}
+Özel gün/durum: {occasion}
+Hediye alıcısı: {recipient}
 
-Kısa ve ikna edici bir öneri nedeni yaz (2-3 cümle, Türkçe).
+Öneri yazarken şunlara dikkat et:
+- Eğer özel bir gün varsa (doğum günü, anneler günü, babalar günü vb.), bu günle bağlantı kur
+- Eğer alıcı belirtilmişse (anne, baba, sevgili vb.), o kişiye uygunluğuna değin
+- Ürünün öne çıkan özelliklerini vurgula
+- Fiyat/performans dengesine değin
+- Hediyenin karşıdaki kişiyi nasıl mutlu edeceğini anlat
+- Samimi, sıcak ve ikna edici bir dil kullan
+
+2-3 cümlelik kısa, etkileyici bir öneri yaz. Türkçe olsun.
 SADECE açıklama metnini döndür, JSON değil.
 """

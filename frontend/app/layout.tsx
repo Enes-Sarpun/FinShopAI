@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import Providers from "./Providers";
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -23,7 +24,27 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" className={`${plusJakarta.variable} ${spaceGrotesk.variable}`}>
+    <html lang="tr" className={`${plusJakarta.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Flash önleme: tema sınıfını JS yüklenmeden önce uygula */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('finshop_theme') || 'system';
+                  var resolved = theme === 'system'
+                    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                    : theme;
+                  if (resolved === 'dark') document.documentElement.classList.add('dark');
+                  var lang = localStorage.getItem('finshop_lang') || 'tr';
+                  document.documentElement.lang = lang;
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className={plusJakarta.className}>
         {/* ── Pastel Blob + Şerit Arka Planı ── */}
         <div
@@ -93,7 +114,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* ── Ana İçerik ── */}
         <div style={{ position: "relative", zIndex: 1 }}>
-          {children}
+          <Providers>{children}</Providers>
         </div>
       </body>
     </html>

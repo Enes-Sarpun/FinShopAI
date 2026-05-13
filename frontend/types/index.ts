@@ -80,6 +80,7 @@ export interface ChatResponse {
   recommendation: Recommendation;
   error: string | null;
   affordability_message: string | null;
+  user_msg_id?: string | null;
 }
 
 export interface ChatHistory {

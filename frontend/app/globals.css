@@ -278,3 +278,20 @@
   25%       { transform: rotate(20deg); }
   75%       { transform: rotate(-15deg); }
 }
+
+/* ─────────────────────────────────────────────────────────
+   SCROLLBAR GİZLEME (yatay scroll snap için)
+───────────────────────────────────────────────────────── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─────────────────────────────────────────────────────────
+   PREFERS-REDUCED-MOTION (D.3)
+───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
