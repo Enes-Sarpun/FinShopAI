@@ -45,6 +45,13 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [fetching, setFetching] = useState(true);
 
+  // Sayfa geçişinde scroll pozisyonunu sıfırla
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+
   useEffect(() => {
     if (!userId) return;
     Promise.all([

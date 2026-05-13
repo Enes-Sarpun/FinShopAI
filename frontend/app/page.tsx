@@ -96,11 +96,10 @@ function Navbar({ onCTA }: { onCTA: () => void }) {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-white/85 backdrop-blur-xl border-b border-gray-100/80 shadow-sm"
-          : "bg-transparent"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
+        ? "bg-white/85 backdrop-blur-xl border-b border-gray-100/80 shadow-sm"
+        : "bg-transparent"
+        }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <a href="#" className="flex items-center gap-2 group">
@@ -390,8 +389,8 @@ function WhatIsIt() {
   const colorMap = {
     indigo: { bg: "bg-indigo-50", text: "text-indigo-600" },
     purple: { bg: "bg-purple-50", text: "text-purple-600" },
-    pink:   { bg: "bg-pink-50",   text: "text-pink-600" },
-    emerald:{ bg: "bg-emerald-50",text: "text-emerald-600" },
+    pink: { bg: "bg-pink-50", text: "text-pink-600" },
+    emerald: { bg: "bg-emerald-50", text: "text-emerald-600" },
   };
 
   return (
@@ -754,8 +753,8 @@ function GoalMockup() {
 function BudgetMockup() {
   const categories = [
     { name: "Market", amount: "₺2.400", icon: "🛒", ok: false },
-    { name: "Eğlence", amount: "₺800",  icon: "🎬", ok: true },
-    { name: "Ulaşım",  amount: "₺600",  icon: "🚌", ok: true },
+    { name: "Eğlence", amount: "₺800", icon: "🎬", ok: true },
+    { name: "Ulaşım", amount: "₺600", icon: "🚌", ok: true },
   ];
   const ref = useRef(null);
   const inView = useInView(ref, { once: true });
@@ -888,9 +887,8 @@ function HowItHelps() {
               <button
                 key={i}
                 onClick={() => scrollTo(i)}
-                className={`rounded-full transition-all duration-300 ${
-                  i === activeIdx ? "w-8 h-2 bg-indigo-500" : "w-2 h-2 bg-gray-300"
-                }`}
+                className={`rounded-full transition-all duration-300 ${i === activeIdx ? "w-8 h-2 bg-indigo-500" : "w-2 h-2 bg-gray-300"
+                  }`}
               />
             ))}
           </div>
@@ -974,10 +972,10 @@ function CTABanner({ onCTA }: { onCTA: () => void }) {
           />
           {/* Floating shopping icons */}
           {[
-            { icon: ShoppingBag, top: "12%", left: "8%",  size: 22, delay: 0 },
-            { icon: Star,        top: "20%", right: "10%", size: 18, delay: 0.8 },
-            { icon: Wallet,      bottom: "15%", left: "12%", size: 20, delay: 0.4 },
-            { icon: Zap,         bottom: "20%", right: "8%", size: 16, delay: 1.2 },
+            { icon: ShoppingBag, top: "12%", left: "8%", size: 22, delay: 0 },
+            { icon: Star, top: "20%", right: "10%", size: 18, delay: 0.8 },
+            { icon: Wallet, bottom: "15%", left: "12%", size: 20, delay: 0.4 },
+            { icon: Zap, bottom: "20%", right: "8%", size: 16, delay: 1.2 },
           ].map(({ icon: Icon, size, delay, ...pos }, i) => (
             <motion.div
               key={i}
@@ -1036,8 +1034,6 @@ function Footer() {
             {[
               { label: "Özellikler", href: "#features" },
               { label: "Nasıl Çalışır", href: "#how" },
-              { label: "Giriş Yap", href: "/login" },
-              { label: "Kayıt Ol", href: "/login?mode=register" },
             ].map((l) => (
               <li key={l.label}>
                 <a href={l.href} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
@@ -1049,14 +1045,34 @@ function Footer() {
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-4">Geliştirici</p>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              ES
+          <p className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-4">Geliştirici Ekip</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                ES
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Enes Sarpün</p>
+                <p className="text-xs text-gray-400">Elektrik-Elektronik Müh. Öğr.</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Enes Sarpün</p>
-              <p className="text-xs text-gray-400">Full-Stack Developer</p>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                FÖ
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Funda Özer</p>
+                <p className="text-xs text-gray-400">Bilgisayar Müh. Öğr.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                FDÇ
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Feyza Dilara Çalışkan</p>
+                <p className="text-xs text-gray-400">Bilgisayar Müh. Öğr.</p>
+              </div>
             </div>
           </div>
         </div>
