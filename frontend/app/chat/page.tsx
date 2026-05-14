@@ -176,7 +176,16 @@ export default function ChatPage() {
       }
       setMessages((prev) => [...prev, ...newMsgs]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Bir hata oluştu.";
+      const raw = err instanceof Error ? err.message : "Bir hata oluştu.";
+      // Backend'den gelen teknik hata mesajlarını kullanıcı dostu hale getir
+      const msg =
+        raw.toLowerCase().includes("güvenlik") ||
+        raw.toLowerCase().includes("moderasyon") ||
+        raw.toLowerCase().includes("mesajınız")
+          ? raw
+          : raw.startsWith("4") || raw.startsWith("5")
+          ? "Şu an yanıt veremiyorum, lütfen tekrar dene."
+          : raw;
       setMessages((prev) => [...prev, { role: "bot", text: `⚠️ ${msg}` }]);
     } finally {
       setSending(false);

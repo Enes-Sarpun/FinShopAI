@@ -34,16 +34,55 @@ class SecurityAgent(BaseAgent):
 
         self.logger.info(f"İçerik kontrolü: {content_type} - user: {user_id}")
 
-        # 1. Hızlı kelime kontrolü
+        # 1. Hızlı kural tabanlı ön kontrol (LLM yok)
+        quick_result = self._quick_safety_check(content)
         word_check = await self._check_banned_words(content)
 
-        # 2. Tam moderasyon
+        # Kesin tehlikeli → LLM'e gerek yok, direkt engelle
+        if quick_result == "block":
+            moderation = {
+                "is_safe": False,
+                "risk_level": "critical",
+                "action": "block",
+                "violations": ["forbidden_pattern"],
+                "reason": "Yasak içerik tespit edildi.",
+                "clean_content": None,
+                "is_spam": False,
+                "has_personal_info": False,
+                "has_injection": True,
+            }
+            await self._take_action(user_id, content, moderation)
+            await self._log_violation(user_id, content, moderation)
+            return {
+                "original_content": content,
+                **{k: moderation[k] for k in
+                   ("is_safe", "risk_level", "action", "violations",
+                    "reason", "clean_content", "is_spam",
+                    "has_personal_info", "has_injection")},
+                "clean_content": moderation.get("clean_content", content),
+                "word_check": word_check,
+            }
+
+        # Normal içerik → LLM çağrısı YOK, hızlıca geçir
+        if quick_result == "safe":
+            self.logger.debug(f"[security] quick=safe, LLM atlandı")
+            return {
+                "original_content": content,
+                "is_safe": True,
+                "risk_level": "low",
+                "action": "allow",
+                "clean_content": content,
+                "violations": [],
+                "reason": "",
+                "is_spam": False,
+                "has_personal_info": False,
+                "has_injection": False,
+                "word_check": word_check,
+            }
+
+        # Şüpheli → LLM ile tam moderasyon
         moderation = await self._moderate_content(content, user_id, content_type)
-
-        # 3. Aksiyon al
         await self._take_action(user_id, content, moderation)
-
-        # 4. Log yaz
         await self._log_violation(user_id, content, moderation)
 
         return {
@@ -57,7 +96,7 @@ class SecurityAgent(BaseAgent):
             "is_spam": moderation.get("is_spam", False),
             "has_personal_info": moderation.get("has_personal_info", False),
             "has_injection": moderation.get("has_injection", False),
-            "word_check": word_check
+            "word_check": word_check,
         }
 
     # ─── Yorum kontrolü ──────────────────────────────────────────────
@@ -119,16 +158,46 @@ class SecurityAgent(BaseAgent):
             self.logger.error(f"Rate limit kontrolü hatası: {e}")
             return {"is_suspicious": False, "action": "allow"}
 
-    # ── Yasaklı kelime listesi (LLM çağırmadan hızlı filtre) ───────────
-    BANNED_WORDS = {
-        "küfür1", "küfür2", "hack", "exploit", "injection",
-        "drop table", "delete from", "<script>", "javascript:",
-        "prompt injection", "ignore previous", "ignore above",
+    # ── Hızlı kural tabanlı kontrol (LLM çağırmadan) ───────────────────
+    # Kesin tehlikeli — direkt block
+    _HARD_BLOCK = {
+        "drop table", "delete from", "truncate table",
+        "<script>", "javascript:", "onerror=", "onload=",
+        "prompt injection", "ignore previous instructions",
+        "ignore above", "disregard all",
     }
+    # Şüpheli — LLM'e gönder
+    _SUSPICIOUS_PATTERNS = {
+        "hack", "exploit", "injection", "sql", "xss",
+        "select * from", "insert into", "union select",
+    }
+
+    BANNED_WORDS = _HARD_BLOCK  # geriye dönük uyumluluk
+
+    def _quick_safety_check(self, content: str) -> str:
+        """
+        Hızlı kural tabanlı ön kontrol.
+        Döndürür: 'safe' | 'suspicious' | 'block'
+        """
+        lower = content.lower()
+
+        # Kesin tehlikeli
+        if any(kw in lower for kw in self._HARD_BLOCK):
+            return "block"
+
+        # Şüpheli — LLM'e bırak
+        if any(kw in lower for kw in self._SUSPICIOUS_PATTERNS):
+            return "suspicious"
+
+        # Çok uzun mesaj (prompt injection girişimi olabilir)
+        if len(content) > 2000:
+            return "suspicious"
+
+        return "safe"
 
     async def _check_banned_words(self, content: str) -> dict:
         lower = content.lower()
-        found = [w for w in self.BANNED_WORDS if w in lower]
+        found = [w for w in self._HARD_BLOCK if w in lower]
         if found:
             censored = content
             for w in found:
@@ -146,7 +215,8 @@ class SecurityAgent(BaseAgent):
             return await self.call_llm_json(prompt)
         except Exception as e:
             self.logger.error(f"Moderasyon hatası: {e}")
-            return {"is_safe": False, "action": "block", "reason": "Moderasyon hatası"}
+            # LLM hatası = içeriği geçir, engelleme (false-positive önleme)
+            return {"is_safe": True, "action": "allow", "reason": "Moderasyon servisi geçici olarak kullanılamıyor"}
 
     async def _detect_fake_review(self, content: str, rating: int, review_count: int) -> dict:
         try:

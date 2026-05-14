@@ -1,29 +1,35 @@
 SEARCH_QUERY_PROMPT = """
-Sen hediye ve alışveriş konusunda uzman bir AI asistanısın. Kullanıcının alışveriş isteğini dikkatlice analiz et.
+Sen Google Shopping arama uzmanısın. Kullanıcının alışveriş isteğini somut ürün aramalarına dönüştür.
 
 Kullanıcı isteği: "{query}"
 
-Aşağıdakilere dikkat et:
-- İstekte özel bir gün/durum var mı? (doğum günü, anneler günü, babalar günü, sevgililer günü, yılbaşı, düğün, mezuniyet, bayram, nişan, baby shower, arkadaş hediyesi vb.)
-- Hediye kime alınıyor? (anne, baba, eş, sevgili, çocuk, arkadaş, iş arkadaşı, öğretmen vb.)
-- Alıcının tahmini yaşı, cinsiyeti veya ilgi alanları belirtilmiş mi?
-- Bütçe sınırı var mı?
-- Hangi ürün kategorisi uygun?
+KRİTİK KURAL — tags alanı:
+- Tags Google Shopping'de doğrudan aranacak somut ÜRÜN İSİMLERİ veya KATEGORİLERİ olmalı.
+- "hediye", "özel gün", "babalar günü" gibi soyut kelimeler tags'e KOYMA.
+- Bunun yerine o kişiye uygun gerçek ürünleri yaz.
+- Örnekler:
+  * "babama hediye" → ["erkek kol saati", "deri cüzdan", "parfüm erkek"]
+  * "anneme hediye" → ["kadın çanta", "parfüm kadın", "ipek eşarp"]
+  * "arkadaşa hediye" → ["bluetooth kulaklık", "akıllı saat", "kitap seti"]
+  * "sevgiliye hediye" → ["takı seti", "çiçek buketi", "parfüm"]
+  * "çocuğa oyuncak" → ["lego seti", "oyuncak araba", "peluş oyuncak"]
+- Bütçe varsa uygun fiyat aralığındaki ürünleri öner.
 
-Bu bilgileri kullanarak Google Shopping'de iyi sonuç verecek arama etiketleri oluştur.
-Etiketler Türkçe olmalı, spesifik ve arama motoruna uygun olmalı.
-Hediye bağlamı varsa "hediye" kelimesini etiketlere ekle.
+Analiz et:
+- Hediye kime? → o kişiye uygun somut ürün kategorileri
+- Bütçe var mı?
+- Özel ilgi alanı belirtilmiş mi?
 
-Aşağıdaki JSON formatında döndür:
+JSON formatında döndür:
 {{
-    "category": "kategori adı (elektronik, giyim, kozmetik, spor, ev, kitap, oyuncak, takı, aksesuar, deneyim vb.)",
+    "category": "ana kategori (elektronik/giyim/kozmetik/spor/ev/aksesuar/takı)",
     "max_price": fiyat sayısı veya null,
     "min_price": fiyat sayısı veya null,
-    "tags": ["anahtar1", "anahtar2", "anahtar3"],
+    "tags": ["somut_ürün_1", "somut_ürün_2", "somut_ürün_3"],
     "gift_context": true veya false,
-    "occasion": "özel gün/durum (doğum günü, anneler günü, babalar günü, sevgililer günü, yılbaşı, mezuniyet, düğün, bayram vb.) veya null",
-    "recipient": "hediye alıcısı (anne, baba, eş, sevgili, çocuk, arkadaş vb.) veya null",
-    "recipient_age_group": "yaş grubu (çocuk/genç/yetişkin/yaşlı) veya null"
+    "occasion": "babalar günü/anneler günü/doğum günü/sevgililer günü/yılbaşı/mezuniyet/düğün/bayram veya null",
+    "recipient": "baba/anne/eş/sevgili/çocuk/arkadaş/iş arkadaşı veya null",
+    "recipient_age_group": "çocuk/genç/yetişkin/yaşlı veya null"
 }}
 
 SADECE JSON DÖNDÜR, BAŞKA AÇIKLAMA YAPMA.

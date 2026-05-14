@@ -105,29 +105,52 @@ class SearchAgent(BaseAgent):
 
         # 2. Arama sorgusunu oluştur
         tags = parsed.get("tags", [])
+        recipient = recipient or parsed.get("recipient", "")
+        occasion = occasion or parsed.get("occasion", "")
+
+        # Tag'ler varsa ilk tag'i kullan (en spesifik), yoksa ham sorgu
         if tags:
-            search_query = " ".join(tags)
+            search_query = tags[0]  # İlk tag en somut ürün — tek tag daha iyi sonuç verir
         elif not llm_parse_ok:
             words = query.split()
             search_query = " ".join(words[:5]) if len(words) > 5 else query
         else:
             search_query = query
 
-        self.logger.info(f"Search query: {search_query} | budget: {budget}")
+        self.logger.info(f"Search query: {search_query} | budget: {budget} | tags: {tags}")
 
         # 3. SerpAPI ile ürün çek
         products = await asyncio.to_thread(
             self._search_google_shopping_sync, search_query, budget
         )
 
-        # Boş sonuçta ham sorgu ile tekrar dene
-        if not products and tags and search_query != query:
-            self.logger.info("Tag sorgusu boş, ham sorgu ile tekrar deneniyor")
+        # Boş sonuçta kalan tag'leri sırayla dene
+        if not products and len(tags) > 1:
+            for alt_tag in tags[1:]:
+                self.logger.info(f"Alternatif tag deneniyor: {alt_tag}")
+                products = await asyncio.to_thread(
+                    self._search_google_shopping_sync, alt_tag, budget
+                )
+                if products:
+                    break
+
+        # Hâlâ boşsa ham sorguyu dene
+        if not products and search_query != query:
+            self.logger.info("Ham sorgu ile tekrar deneniyor")
             words = query.split()
             fallback = " ".join(words[:5]) if len(words) > 5 else query
             products = await asyncio.to_thread(
                 self._search_google_shopping_sync, fallback, budget
             )
+
+        # Son çare: recipient/occasion'a göre kural tabanlı fallback
+        if not products and (recipient or occasion):
+            fallback_query = self._get_gift_fallback(recipient, occasion, budget)
+            if fallback_query:
+                self.logger.info(f"Hediye fallback deneniyor: {fallback_query}")
+                products = await asyncio.to_thread(
+                    self._search_google_shopping_sync, fallback_query, budget
+                )
 
         # Karşılaştırma modunda: her ürün için ayrı arama yap
         if is_comparison and comparison_products and len(products) < 2:
@@ -258,6 +281,49 @@ class SearchAgent(BaseAgent):
             if key in seller_lower:
                 return url_fn(encoded)
         return f"https://www.google.com/search?q={encoded}+satın+al"
+
+    @staticmethod
+    def _get_gift_fallback(recipient: str, occasion: str, budget: float = None) -> str:
+        """
+        recipient/occasion'a göre Google Shopping'de sonuç veren somut bir arama sorgusu döner.
+        """
+        r = (recipient or "").lower()
+        o = (occasion or "").lower()
+
+        # Alıcıya göre popüler hediye kategorileri
+        recipient_map = {
+            "baba":   ["erkek kol saati", "deri cüzdan erkek", "erkek parfüm"],
+            "anne":   ["kadın çanta", "kadın parfüm", "altın kolye"],
+            "eş":     ["takı seti", "parfüm", "çiçek aranjmanı"],
+            "sevgili":["çiçek buketi", "takı kadın", "parfüm kadın"],
+            "arkadaş":["bluetooth kulaklık", "kupa bardak kişiselleştirilmiş", "kitap seti"],
+            "çocuk":  ["lego seti", "oyuncak araba", "peluş oyuncak"],
+            "öğretmen":["kupa bardak", "çiçek", "ajanda seti"],
+            "iş arkadaşı": ["kupa bardak", "çikolata kutusu", "ajanda"],
+        }
+
+        # Bütçeye göre seçim (yüksek bütçe → ilk seçenek, düşük bütçe → son seçenek)
+        for key, options in recipient_map.items():
+            if key in r:
+                if budget and budget < 500:
+                    return options[-1]
+                return options[0]
+
+        # Occasion'a göre generic fallback
+        if "babalar" in o:
+            return "erkek kol saati"
+        if "anneler" in o:
+            return "kadın çanta"
+        if "doğum" in o:
+            return "doğum günü hediyesi seti"
+        if "sevgililer" in o:
+            return "sevgiliye hediye seti"
+        if "yılbaşı" in o or "noel" in o:
+            return "yılbaşı hediye seti"
+        if "mezuniyet" in o:
+            return "mezuniyet hediyesi"
+
+        return "hediye seti"
 
     async def _generate_reason(self, product: dict, occasion: str = "", recipient: str = "") -> str:
         try:
