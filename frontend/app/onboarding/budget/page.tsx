@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { budgetApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -71,6 +72,14 @@ export default function BudgetPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-10 px-4">
       <div className="card w-full max-w-2xl mx-auto">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Geri
+        </button>
         <h1 className="text-xl font-bold text-gray-900 mb-2">Bütçe Bilgileri</h1>
         <p className="text-gray-500 text-sm mb-6">Sana özel öneriler sunabilmemiz için aylık gelir ve giderlerini gir.</p>
 

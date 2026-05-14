@@ -1,14 +1,13 @@
 "use client";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { MessageCircle, Clock, Wallet, Brain } from "lucide-react";
+import { MessageCircle, Clock, Wallet, Brain, Settings, LifeBuoy } from "lucide-react";
 
 const ACTIONS = [
   {
     href: "/chat",
     label: "Alışveriş Asistanı",
     icon: MessageCircle,
-    gradient: "from-blue-500 to-indigo-500",
     bg: "bg-blue-50 dark:bg-blue-900/20",
     iconColor: "text-blue-600 dark:text-blue-400",
     desc: "Bütçene uygun ürün bul",
@@ -17,7 +16,6 @@ const ACTIONS = [
     href: "/chat/history",
     label: "Geçmiş Aramalar",
     icon: Clock,
-    gradient: "from-purple-500 to-fuchsia-500",
     bg: "bg-purple-50 dark:bg-purple-900/20",
     iconColor: "text-purple-600 dark:text-purple-400",
     desc: "Önceki sohbetlere dön",
@@ -26,7 +24,6 @@ const ACTIONS = [
     href: "/onboarding/budget",
     label: "Bütçeyi Güncelle",
     icon: Wallet,
-    gradient: "from-emerald-500 to-teal-500",
     bg: "bg-emerald-50 dark:bg-emerald-900/20",
     iconColor: "text-emerald-600 dark:text-emerald-400",
     desc: "Gelir ve giderlerini düzenle",
@@ -35,16 +32,31 @@ const ACTIONS = [
     href: "/onboarding/personality",
     label: "Kişilik Testi",
     icon: Brain,
-    gradient: "from-orange-500 to-amber-500",
     bg: "bg-orange-50 dark:bg-orange-900/20",
     iconColor: "text-orange-600 dark:text-orange-400",
     desc: "Harcama profilini güncelle",
+  },
+  {
+    href: "/settings/account",
+    label: "Hesap Ayarları",
+    icon: Settings,
+    bg: "bg-gray-50 dark:bg-gray-700/30",
+    iconColor: "text-gray-600 dark:text-gray-400",
+    desc: "Profil ve tercihlerini yönet",
+  },
+  {
+    href: "/support",
+    label: "Destek",
+    icon: LifeBuoy,
+    bg: "bg-rose-50 dark:bg-rose-900/20",
+    iconColor: "text-rose-600 dark:text-rose-400",
+    desc: "Yardım al veya geri bildirim ver",
   },
 ];
 
 const container = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07 } },
+  show: { transition: { staggerChildren: 0.06 } },
 };
 
 const cardAnim = {
@@ -57,7 +69,7 @@ export default function QuickActions() {
     <div className="card">
       <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Hızlı Erişim</h2>
       <motion.div
-        className="grid grid-cols-2 gap-3"
+        className="grid grid-cols-2 md:grid-cols-3 gap-3"
         variants={container}
         initial="hidden"
         animate="show"

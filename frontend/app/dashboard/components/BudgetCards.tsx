@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
+import { useEffect, useState } from "react";
+import { TrendingUp, TrendingDown, Wallet, PiggyBank, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { motion } from "framer-motion";
 import CountUp from "react-countup";
 import type { Budget } from "@/types";
@@ -15,16 +15,22 @@ const STATUS_LABELS: Record<string, string> = {
   critical: "Kritik",
 };
 
-const STATUS_BAR: Record<string, string> = {
-  healthy: "bg-gradient-to-r from-emerald-400 to-emerald-500",
-  warning: "bg-gradient-to-r from-amber-400 to-orange-400",
-  critical: "bg-gradient-to-r from-red-400 to-red-500",
-};
-
 const STATUS_BADGE: Record<string, string> = {
   healthy: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   warning: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   critical: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+};
+
+const STATUS_ICON: Record<string, typeof CheckCircle> = {
+  healthy: CheckCircle,
+  warning: AlertTriangle,
+  critical: AlertTriangle,
+};
+
+const STATUS_ICON_COLOR: Record<string, string> = {
+  healthy: "text-emerald-500",
+  warning: "text-amber-500",
+  critical: "text-red-500",
 };
 
 const container = {
@@ -39,24 +45,14 @@ const item = {
 
 export default function BudgetCards({ budget }: BudgetCardsProps) {
   const metrics = budget.financial_metrics;
-  const [animatedWidth, setAnimatedWidth] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
-  // Progress bar animasyonu için useEffect [GÖREV: ARKADAŞ 1]
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setAnimatedWidth(Math.min(metrics.expense_ratio, 100));
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [metrics.expense_ratio]);
+    const t = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(t);
+  }, []);
 
-  // Gider oranına göre dinamik renk belirleme [GÖREV: ARKADAŞ 1]
-  const getProgressColor = (ratio: number) => {
-    if (ratio < 50) return "bg-green-500";
-    if (ratio < 80) return "bg-yellow-500";
-    return "bg-red-500";
-  };
-
-    const cards = [
+  const cards = [
     {
       label: "Aylık Gelir",
       value: metrics.total_income,
@@ -95,7 +91,13 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
     },
   ];
 
-  const expenseRatio = Math.min(metrics.expense_ratio, 100);
+  // Multi-segment bar percentages
+  const income = metrics.total_income || 1;
+  const expensePct = Math.min((metrics.fixed_expenses / income) * 100, 100);
+  const savingsPct = Math.min((metrics.savings_goal / income) * 100, Math.max(0, 100 - expensePct));
+  const spendablePct = Math.min((metrics.spendable_after_savings / income) * 100, Math.max(0, 100 - expensePct - savingsPct));
+
+  const StatusIcon = STATUS_ICON[budget.status] ?? Info;
 
   return (
     <div className="space-y-4">
@@ -139,23 +141,73 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-800 dark:text-gray-100">Bütçe Sağlığı</h2>
-          <span className={`text-xs font-semibold px-3 py-1 rounded-full ${STATUS_BADGE[budget.status] ?? STATUS_BADGE.healthy}`}>
+          <span className={`text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 ${STATUS_BADGE[budget.status] ?? STATUS_BADGE.healthy}`}>
+            <StatusIcon className={`w-3.5 h-3.5 ${STATUS_ICON_COLOR[budget.status]}`} />
             {STATUS_LABELS[budget.status] ?? budget.status}
           </span>
         </div>
-        <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+
+        {/* Multi-segment bar */}
+        <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-4 overflow-hidden flex">
           <motion.div
-            className={`${STATUS_BAR[budget.status] ?? "bg-blue-500"} h-3 rounded-full`}
+            className="bg-gradient-to-r from-red-400 to-red-500 h-4 rounded-l-full"
             initial={{ width: 0 }}
-            animate={{ width: `${expenseRatio}%` }}
+            animate={{ width: mounted ? `${expensePct}%` : "0%" }}
             transition={{ duration: 0.8, ease: "easeOut", delay: 0.5 }}
+            title={`Giderler: %${expensePct.toFixed(0)}`}
+          />
+          <motion.div
+            className="bg-gradient-to-r from-purple-400 to-purple-500 h-4"
+            initial={{ width: 0 }}
+            animate={{ width: mounted ? `${savingsPct}%` : "0%" }}
+            transition={{ duration: 0.8, ease: "easeOut", delay: 0.6 }}
+            title={`Tasarruf: %${savingsPct.toFixed(0)}`}
+          />
+          <motion.div
+            className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-4 rounded-r-full"
+            initial={{ width: 0 }}
+            animate={{ width: mounted ? `${spendablePct}%` : "0%" }}
+            transition={{ duration: 0.8, ease: "easeOut", delay: 0.7 }}
+            title={`Harcanabilir: %${spendablePct.toFixed(0)}`}
           />
         </div>
-        <div className="flex justify-between mt-2">
-          <p className="text-xs text-gray-500 dark:text-gray-400">Gider oranı</p>
-          <p className="text-xs font-semibold font-numeric text-gray-700 dark:text-gray-300">
-            %{expenseRatio}
-          </p>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+          <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" />
+            Giderler %{expensePct.toFixed(0)}
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block" />
+            Tasarruf %{savingsPct.toFixed(0)}
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
+            Harcanabilir %{spendablePct.toFixed(0)}
+          </span>
+        </div>
+
+        {/* Extra metrics row */}
+        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <div className="text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Kullanılabilir Bütçe</p>
+            <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 font-numeric">
+              <CountUp end={metrics.available_budget} duration={1.2} separator="." decimals={0} suffix=" ₺" useEasing />
+            </p>
+          </div>
+          <div className="text-center border-x border-gray-100 dark:border-gray-700">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Gider Oranı</p>
+            <p className="text-sm font-bold text-gray-700 dark:text-gray-300 font-numeric">
+              %{Math.min(metrics.expense_ratio, 100).toFixed(0)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Tasarruf Sonrası</p>
+            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-numeric">
+              <CountUp end={metrics.spendable_after_savings} duration={1.2} separator="." decimals={0} suffix=" ₺" useEasing />
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>

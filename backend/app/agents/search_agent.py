@@ -142,7 +142,7 @@ class SearchAgent(BaseAgent):
 
         # 5. İlk 3 ürün için LLM öneri nedeni üret
         for product in products[:3]:
-            reason = await self._generate_reason(product)
+            reason = await self._generate_reason(product, occasion, recipient)
             product["recommendation_reason"] = reason
 
         # 6. Supabase'e kaydet
@@ -180,7 +180,8 @@ class SearchAgent(BaseAgent):
                 price_raw = item.get("price", "0")
                 price = self._parse_price(price_raw)
 
-                if budget and price > budget:
+                # Bütçeyi aşıyorsa veya parse edilemeden 0 kaldıysa atla
+                if budget and (price == 0 or price > float(budget)):
                     continue
 
                 serpapi_product_id = (
@@ -244,7 +245,7 @@ class SearchAgent(BaseAgent):
                 return url_fn(encoded)
         return f"https://www.google.com/search?q={encoded}+satın+al"
 
-    async def _generate_reason(self, product: dict) -> str:
+    async def _generate_reason(self, product: dict, occasion: str = "", recipient: str = "") -> str:
         try:
             prompt = REVIEW_ANALYSIS_PROMPT.format(
                 product_name=product.get("name", ""),
@@ -254,12 +255,21 @@ class SearchAgent(BaseAgent):
             return await self.call_llm(prompt)
         except Exception as e:
             self.logger.error(f"LLM öneri nedeni hatası: {e}")
+                occasion=occasion or "belirtilmedi",
+                recipient=recipient or "belirtilmedi",
+            )
+            return await self.call_llm(prompt)
+        except Exception as e:
+            self.logger.error(f"LLM öneri hatası: {e}")
             price = product.get("price", 0)
             seller = product.get("seller", "")
             name = product.get("name", "")
+            occasion_text = f"{occasion} için " if occasion else ""
+            recipient_text = f"{recipient}'a " if recipient else ""
             return (
                 f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
                 f"Bütçenize uygun bu ürün kaliteli bir seçenek olarak öne çıkmaktadır."
+                f"{occasion_text}{recipient_text}bütçenize uygun kaliteli bir seçenek olarak öne çıkmaktadır."
             )
 
     async def _save_to_supabase(self, user_id: str, query: str, products: list):

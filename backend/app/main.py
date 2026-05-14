@@ -35,6 +35,8 @@ app.include_router(budget.router, prefix="/api/budget", tags=["budget"])
 app.include_router(products.router, prefix="/api/products", tags=["products"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(security.router)
+app.include_router(security.router, prefix="/api/security", tags=["security"])
+
 
 @app.get("/health")
 async def health_check():

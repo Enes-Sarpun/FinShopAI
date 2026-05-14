@@ -8,11 +8,18 @@
   :root {
     --bg-base: linear-gradient(135deg, #f0f4ff 0%, #fef0f5 50%, #fff5e6 100%);
     --bg-mesh: linear-gradient(135deg, #f0f4ff 0%, #fef0f5 50%, #fff5e6 100%);
-    --bg-mesh-dark: linear-gradient(135deg, #0f172a 0%, #0f172a 50%, #0f172a 100%);
+    --bg-mesh-dark: #0f172a;
   }
 
   html {
     scroll-behavior: smooth;
+    /* transition sadece tema geçişleri için — sayfalar arası geçişte gecikme yaratmaz */
+    transition: background-color 300ms ease;
+  }
+
+  html.dark {
+    background-color: #0f172a;
+    color-scheme: dark;
   }
 
   body {
@@ -20,11 +27,12 @@
     font-family: var(--font-plus-jakarta), 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
     background: var(--bg-base);
     min-height: 100vh;
+    transition: background 300ms ease, color 300ms ease;
   }
 
-  .dark body {
+  html.dark body {
     @apply text-gray-100;
-    background: var(--bg-mesh-dark);
+    background: transparent;
   }
 
   .font-numeric {
@@ -277,4 +285,21 @@
   0%, 100% { transform: rotate(0deg); }
   25%       { transform: rotate(20deg); }
   75%       { transform: rotate(-15deg); }
+}
+
+/* ─────────────────────────────────────────────────────────
+   SCROLLBAR GİZLEME (yatay scroll snap için)
+───────────────────────────────────────────────────────── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─────────────────────────────────────────────────────────
+   PREFERS-REDUCED-MOTION (D.3)
+───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
