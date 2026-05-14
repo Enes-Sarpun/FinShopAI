@@ -84,6 +84,11 @@ class TestRoutingFunctions:
 
 class TestOrchestatorNodes:
 
+    def teardown_method(self):
+        import app.agents.orchestrator as orch_module
+        orch_module._llm_instance = None
+        orch_module._db_instance = None
+
     def _base_state(self) -> OrchestratorState:
         return {
             "user_id": "u1", "message": "laptop öner", "intent": "product_search",
@@ -225,13 +230,21 @@ class TestOrchestatorNodes:
 
 class TestServiceSingleton:
 
+    def setup_method(self):
+        """Her testten önce singletonları sıfırla."""
+        import app.agents.orchestrator as orch_module
+        orch_module._llm_instance = None
+        orch_module._db_instance = None
+
+    def teardown_method(self):
+        """Her testten sonra singletonları temizle (diğer test dosyalarını bozmaması için)."""
+        import app.agents.orchestrator as orch_module
+        orch_module._llm_instance = None
+        orch_module._db_instance = None
+
     def test_get_services_returns_same_instances(self):
         """İki çağrı aynı instance'ları döndürmeli."""
         import app.agents.orchestrator as orch_module
-
-        # Singletonları sıfırla
-        orch_module._llm_instance = None
-        orch_module._db_instance = None
 
         with patch("app.agents.orchestrator.LLMService") as MockLLM:
             with patch("app.agents.orchestrator.SupabaseService") as MockDB:
@@ -246,3 +259,4 @@ class TestServiceSingleton:
         assert MockDB.call_count == 1
         assert llm1 is llm2
         assert db1 is db2
+

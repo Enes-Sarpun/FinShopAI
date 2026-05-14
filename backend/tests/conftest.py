@@ -21,3 +21,29 @@ os.environ.setdefault("JWT_SECRET", "test-jwt-secret-minimum-32-chars-long")
 os.environ.setdefault("SERPAPI_KEY", "test-serpapi-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("ALLOWED_ORIGINS", '["http://localhost:3000"]')
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_orchestrator_singletons():
+    """Her test sonunda orchestrator singleton'larını sıfırla.
+    Böylece test dosyaları arası mock sızıntısı önlenir."""
+    # BaseAgent ve SupabaseService orijinallerini sakla
+    import app.agents.base_agent as base_mod
+    import app.services.supabase_service as supa_mod
+    orig_base = base_mod.BaseAgent
+    orig_supa = supa_mod.SupabaseService
+
+    yield
+
+    # Geri yükle
+    base_mod.BaseAgent = orig_base
+    supa_mod.SupabaseService = orig_supa
+
+    try:
+        import app.agents.orchestrator as orch
+        orch._llm_instance = None
+        orch._db_instance = None
+    except (ImportError, AttributeError):
+        pass

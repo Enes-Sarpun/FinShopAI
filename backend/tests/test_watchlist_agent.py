@@ -3,12 +3,20 @@ WatchlistAgent v2 Testleri
 ===========================
 Test çalıştırma:
     cd <proje_koku>
-    .\venv\Scripts\python.exe -m pytest backend/tests/test_watchlist_agent.py -v --asyncio-mode=auto
+    venv/Scripts/python.exe -m pytest backend/tests/test_watchlist_agent.py -v --asyncio-mode=auto
 """
 
 import pytest
+import importlib
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch, call
+
+# BaseAgent'ın başka testlerden bozulmuş olma ihtimaline karşı reload
+import app.agents.base_agent as _base_mod
+importlib.reload(_base_mod)
+import app.agents.watchlist_agent as _wl_mod
+importlib.reload(_wl_mod)
+
 from app.agents.watchlist_agent import WatchlistAgent, NOTIFICATION_COOLDOWN_HOURS
 
 

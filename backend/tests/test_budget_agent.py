@@ -114,14 +114,22 @@ class MockBaseAgent:
 
 # ==================== BUDGET AGENT IMPORT ====================
 
-# BaseAgent'ı mock ile değiştir
+# BaseAgent'ı mock ile değiştir (test sonunda geri yüklenecek)
 import app.agents.base_agent as base_module
+_original_base_agent = base_module.BaseAgent  # Orijinali sakla
 base_module.BaseAgent = MockBaseAgent
 
 import app.services.supabase_service as supabase_module
+_original_supabase_service = supabase_module.SupabaseService
 supabase_module.SupabaseService = MockSupabaseService
 
 from app.agents.budget_agent import BudgetAgent
+
+
+def teardown_module():
+    """Test dosyası bittikten sonra orijinal class'ları geri yükle."""
+    base_module.BaseAgent = _original_base_agent
+    supabase_module.SupabaseService = _original_supabase_service
 
 
 # ==================== TEST FONKSİYONLARI ====================
