@@ -1,58 +1,73 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from app.agents.security_agent import SecurityAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
+from app.core.security import get_current_user
 
 router = APIRouter(tags=["security"])
 
-@router.post("/api/security/check")
-async def check_content(
-    content: str,
-    user_id: str = "anonymous",
+
+class ContentCheckRequest(BaseModel):
+    content: str
     content_type: str = "message"
-):
-    llm = LLMService()
-    db = SupabaseService()
-    agent = SecurityAgent(llm=llm, db=db)
-    return await agent.execute({
-        "action_type": "check_content",
-        "content": content,
-        "user_id": user_id,
-        "content_type": content_type
-    })
 
-@router.post("/api/security/check-review")
-async def check_review(
-    content: str,
-    user_id: str = "anonymous",
-    rating: int = 3,
+
+class ReviewCheckRequest(BaseModel):
+    content: str
+    rating: int = 3
     review_count: int = 0
+
+
+class RateLimitRequest(BaseModel):
+    action_count: int
+    action_type_detail: str = "request"
+    ip_address: str = "unknown"
+
+
+def _make_agent() -> SecurityAgent:
+    return SecurityAgent(llm=LLMService(), db=SupabaseService())
+
+
+@router.post("/check")
+async def check_content(
+    body: ContentCheckRequest,
+    current_user: dict = Depends(get_current_user),
 ):
-    llm = LLMService()
-    db = SupabaseService()
-    agent = SecurityAgent(llm=llm, db=db)
-    return await agent.execute({
-        "action_type": "check_review",
-        "content": content,
+    user_id = current_user["sub"]
+    return await _make_agent().execute({
+        "action_type": "check_content",
+        "content": body.content,
         "user_id": user_id,
-        "rating": rating,
-        "review_count": review_count
+        "content_type": body.content_type,
     })
 
-@router.post("/api/security/check-rate-limit")
-async def check_rate_limit(
-    user_id: str,
-    action_count: int,
-    action_type_detail: str = "request",
-    ip_address: str = "unknown"
+
+@router.post("/check-review")
+async def check_review(
+    body: ReviewCheckRequest,
+    current_user: dict = Depends(get_current_user),
 ):
-    llm = LLMService()
-    db = SupabaseService()
-    agent = SecurityAgent(llm=llm, db=db)
-    return await agent.execute({
+    user_id = current_user["sub"]
+    return await _make_agent().execute({
+        "action_type": "check_review",
+        "content": body.content,
+        "user_id": user_id,
+        "rating": body.rating,
+        "review_count": body.review_count,
+    })
+
+
+@router.post("/check-rate-limit")
+async def check_rate_limit(
+    body: RateLimitRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["sub"]
+    return await _make_agent().execute({
         "action_type": "check_rate_limit",
         "user_id": user_id,
-        "action_count": action_count,
-        "action_type_detail": action_type_detail,
-        "ip_address": ip_address
+        "action_count": body.action_count,
+        "action_type_detail": body.action_type_detail,
+        "ip_address": body.ip_address,
     })

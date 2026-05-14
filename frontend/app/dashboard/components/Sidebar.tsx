@@ -7,8 +7,10 @@ import {
   ShoppingBag, LayoutDashboard, MessageSquarePlus,
   Settings, LogOut, ChevronDown,
   Wallet, Brain, PanelLeftClose, PanelLeftOpen, Menu, X,
+  Sun, Moon, Monitor,
 } from "lucide-react";
 import { authApi, chatApi } from "@/lib/api";
+import { useTheme } from "@/lib/ThemeContext";
 import type { ChatHistory } from "@/types";
 
 interface SidebarProps {
@@ -34,6 +36,25 @@ interface ContentProps {
   userEmail?: string;
   history: ChatHistory[];
   onClose?: () => void;
+}
+
+function ThemeToggle({ collapsed }: { collapsed: boolean }) {
+  const { theme, setTheme } = useTheme();
+
+  const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+  const Icon = theme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
+  const label = theme === "dark" ? "Koyu" : theme === "system" ? "Sistem" : "Açık";
+
+  return (
+    <button
+      onClick={() => setTheme(next)}
+      title={`Tema: ${label} (değiştir)`}
+      className="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </button>
+  );
 }
 
 function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onClose }: ContentProps) {
@@ -129,6 +150,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
 
       {/* ── Alt: Profil ── */}
       <div className="border-t border-gray-200/80 dark:border-gray-700/60 px-2 py-2 space-y-0.5">
+        <ThemeToggle collapsed={collapsed} />
         {BOTTOM_ITEMS.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}

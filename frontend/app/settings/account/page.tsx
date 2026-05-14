@@ -2,16 +2,18 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authApi, chatApi } from "@/lib/api";
+import { useTheme } from "@/lib/ThemeContext";
+import { useLang } from "@/lib/LangContext";
 import Sidebar from "@/app/dashboard/components/Sidebar";
 import {
   User, Mail, ArrowLeft, Pencil, Check, X,
-  ShoppingBag, Brain, Wallet, Bell, Moon, Globe,
-  Shield, LogOut,
+  ShoppingBag, Brain, Wallet, Bell, Globe,
+  Shield, LogOut, Sun, Moon, Monitor, ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface UserInfo { full_name?: string; email?: string; id?: string; }
+interface UserInfo { full_name?: string; email?: string; }
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
@@ -19,9 +21,22 @@ const fadeUp = (delay = 0) => ({
   transition: { duration: 0.4, delay, ease: [0.25, 0.1, 0.25, 1] as const },
 });
 
-function EditField({
-  label, value, onSave,
-}: { label: string; value: string; onSave: (v: string) => Promise<void> }) {
+// ── Banner gradient presets ────────────────────────────────────────────────
+const BANNER_PRESETS = [
+  { id: "indigo", style: "linear-gradient(135deg, #667eea, #764ba2)", label: "Mor-İndigo" },
+  { id: "ocean", style: "linear-gradient(135deg, #2563eb, #7c3aed)", label: "Mavi-Mor" },
+  { id: "sunset", style: "linear-gradient(135deg, #f093fb, #f5576c)", label: "Gün Batımı" },
+  { id: "teal", style: "linear-gradient(135deg, #0ea5e9, #10b981)", label: "Okyanus" },
+  { id: "night", style: "linear-gradient(135deg, #0f172a, #4c1d95)", label: "Gece" },
+  { id: "spring", style: "linear-gradient(135deg, #84cc16, #22c55e)", label: "Bahar" },
+  { id: "rose", style: "linear-gradient(135deg, #ec4899, #a855f7)", label: "Galaksi" },
+  { id: "minimal", style: "linear-gradient(135deg, #e2e8f0, #94a3b8)", label: "Minimal" },
+];
+
+const BANNER_KEY = "finshop_banner";
+
+// ── Inline edit field ──────────────────────────────────────────────────────
+function EditField({ label, value, onSave }: { label: string; value: string; onSave: (v: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -45,30 +60,25 @@ function EditField({
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
           />
         ) : (
-          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{value || "—"}</p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 max-w-[280px] truncate" title={value}>
+            {value || "—"}
+          </p>
         )}
       </div>
       {editing ? (
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 transition-colors"
-          >
+          <button onClick={handleSave} disabled={saving}
+            className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 transition-colors">
             <Check className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={() => { setDraft(value); setEditing(false); }}
-            className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200 transition-colors"
-          >
+          <button onClick={() => { setDraft(value); setEditing(false); }}
+            className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200 transition-colors">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setEditing(true)}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-        >
+        <button onClick={() => setEditing(true)}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
           <Pencil className="w-3.5 h-3.5" />
         </button>
       )}
@@ -76,29 +86,151 @@ function EditField({
   );
 }
 
+// ── Theme segment control ──────────────────────────────────────────────────
+function ThemeSelector() {
+  const { theme, setTheme } = useTheme();
+  const options = [
+    { value: "light" as const, icon: Sun, label: "Açık" },
+    { value: "dark" as const, icon: Moon, label: "Koyu" },
+    { value: "system" as const, icon: Monitor, label: "Sistem" },
+  ];
+
+  return (
+    <div className="flex gap-1 bg-gray-100 dark:bg-gray-700/60 rounded-xl p-1">
+      {options.map(({ value, icon: Icon, label }) => (
+        <button
+          key={value}
+          onClick={() => setTheme(value)}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+            theme === value
+              ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+          }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Language selector ──────────────────────────────────────────────────────
+function LangSelector() {
+  const { lang, setLang } = useLang();
+  const [open, setOpen] = useState(false);
+  const options = [
+    { value: "tr" as const, flag: "🇹🇷", label: "Türkçe" },
+    { value: "en" as const, flag: "🇬🇧", label: "English" },
+  ];
+  const current = options.find((o) => o.value === lang) ?? options[0];
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
+      >
+        <span>{current.flag}</span>
+        <span>{current.label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-lg overflow-hidden z-20 min-w-[130px]"
+          >
+            {options.map(({ value, flag, label }) => (
+              <button
+                key={value}
+                onClick={() => { setLang(value); setOpen(false); }}
+                className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
+                  lang === value
+                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                }`}
+              >
+                <span>{flag}</span>
+                <span>{label}</span>
+                {lang === value && <Check className="w-3.5 h-3.5 ml-auto" />}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Banner picker ──────────────────────────────────────────────────────────
+function BannerPicker({ current, onSelect, onClose }: {
+  current: string; onSelect: (style: string) => void; onClose: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="absolute right-3 top-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-3 z-10 w-64"
+    >
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Banner Rengi</p>
+        <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {BANNER_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => { onSelect(p.style); onClose(); }}
+            title={p.label}
+            className={`h-8 rounded-lg transition-all ${current === p.style ? "ring-2 ring-blue-500 ring-offset-1 scale-105" : "hover:scale-105"}`}
+            style={{ background: p.style }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
 export default function AccountPage() {
   const { loading } = useAuth();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [fetching, setFetching] = useState(true);
-  const [stats, setStats] = useState({ searches: 0 });
+  const [searchCount, setSearchCount] = useState(0);
+  const [bannerStyle, setBannerStyle] = useState(BANNER_PRESETS[0].style);
+  const [bannerPickerOpen, setBannerPickerOpen] = useState(false);
 
   useEffect(() => {
+    const saved = localStorage.getItem(BANNER_KEY);
+    if (saved) setBannerStyle(saved);
+
     Promise.all([
       authApi.me().catch(() => null),
       chatApi.getHistory(100).catch(() => null),
     ]).then(([u, h]) => {
       setUser(u as UserInfo | null);
       const hist = (h as { history?: unknown[] } | null)?.history ?? [];
-      setStats({ searches: hist.length });
+      setSearchCount(hist.length);
     }).finally(() => setFetching(false));
   }, []);
+
+  function handleBannerSelect(style: string) {
+    setBannerStyle(style);
+    localStorage.setItem(BANNER_KEY, style);
+  }
 
   const initials = user?.full_name
     ? user.full_name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
     : "?";
 
   async function saveName(name: string) {
-    // Name update endpoint placeholder — update optimistically
     setUser((prev) => prev ? { ...prev, full_name: name } : prev);
   }
 
@@ -109,10 +241,8 @@ export default function AccountPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-6 py-8">
 
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors mb-6"
-          >
+          <Link href="/dashboard"
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors mb-6">
             <ArrowLeft className="w-4 h-4" />
             Dashboard'a Dön
           </Link>
@@ -124,48 +254,83 @@ export default function AccountPage() {
           ) : (
             <div className="space-y-5">
 
-              {/* Profile header with gradient cover */}
+              {/* ── Profil Header ── */}
               <motion.div {...fadeUp(0)} className="card p-0 overflow-hidden">
-                <div className="h-24 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+                {/* Banner */}
+                <div className="relative h-40" style={{ background: bannerStyle }}>
+                  <button
+                    onClick={() => setBannerPickerOpen((p) => !p)}
+                    className="absolute top-3 right-3 px-2.5 py-1.5 bg-black/30 hover:bg-black/50 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 backdrop-blur-sm"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Düzenle
+                  </button>
+
+                  <AnimatePresence>
+                    {bannerPickerOpen && (
+                      <BannerPicker
+                        current={bannerStyle}
+                        onSelect={handleBannerSelect}
+                        onClose={() => setBannerPickerOpen(false)}
+                      />
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Avatar — yarısı banner'a biner */}
                 <div className="px-6 pb-5">
-                  <div className="flex items-end gap-4 -mt-10 mb-4">
-                    <div className="w-20 h-20 rounded-2xl bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-800 shadow-lg flex items-center justify-center text-blue-600 dark:text-blue-400 text-2xl font-bold flex-shrink-0">
-                      {initials}
+                  <div className="-mt-12">
+                    <div className="relative inline-block group">
+                      <div className="w-24 h-24 rounded-2xl border-4 border-white dark:border-gray-900 shadow-xl flex items-center justify-center text-3xl font-bold flex-shrink-0"
+                        style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", color: "#fff" }}>
+                        {initials}
+                      </div>
+                      {/* hover overlay — ileride fotoğraf yükleme için */}
+                      <div className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer border-4 border-white dark:border-gray-900">
+                        <span className="text-white text-xs font-medium">Değiştir</span>
+                      </div>
                     </div>
-                    <div className="pb-1">
-                      <p className="font-bold text-gray-900 dark:text-gray-100 text-lg">{user?.full_name || "Kullanıcı"}</p>
+                    <div className="mt-3">
+                      <p className="font-bold text-gray-900 dark:text-gray-100 text-xl max-w-[320px] truncate" title={user?.full_name}>
+                        {user?.full_name || "Kullanıcı"}
+                      </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
                     </div>
                   </div>
 
                   {/* Stats */}
-                  <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                    <div className="text-center">
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Aramalar</p>
+                  <div className="grid grid-cols-3 gap-3 pt-4 mt-4 border-t border-gray-100 dark:border-gray-700">
+                    <Link href="/chat/history" className="text-center group cursor-pointer">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Aramalar</p>
                       <div className="flex items-center justify-center gap-1">
                         <ShoppingBag className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">{stats.searches}</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          {searchCount > 0 ? searchCount : "—"}
+                        </span>
                       </div>
-                    </div>
-                    <div className="text-center border-x border-gray-100 dark:border-gray-700">
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Analizler</p>
+                      {searchCount === 0 && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">İlk aramayı yap!</p>
+                      )}
+                    </Link>
+                    <Link href="/onboarding/personality" className="text-center border-x border-gray-100 dark:border-gray-700 group cursor-pointer">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Analizler</p>
                       <div className="flex items-center justify-center gap-1">
                         <Brain className="w-3.5 h-3.5 text-purple-500" />
-                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">1</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">1</span>
                       </div>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Bütçe Planı</p>
+                    </Link>
+                    <Link href="/onboarding/budget" className="text-center group cursor-pointer">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Bütçe</p>
                       <div className="flex items-center justify-center gap-1">
                         <Wallet className="w-3.5 h-3.5 text-emerald-500" />
-                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">Aktif</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">Aktif</span>
                       </div>
-                    </div>
+                    </Link>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Hesap Bilgileri - inline edit */}
+              {/* ── Hesap Bilgileri ── */}
               <motion.div {...fadeUp(0.08)} className="card">
                 <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Hesap Bilgileri</h2>
                 <div className="space-y-4">
@@ -174,11 +339,7 @@ export default function AccountPage() {
                       <User className="w-4 h-4 text-gray-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <EditField
-                        label="Ad Soyad"
-                        value={user?.full_name ?? ""}
-                        onSave={saveName}
-                      />
+                      <EditField label="Ad Soyad" value={user?.full_name ?? ""} onSave={saveName} />
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -194,59 +355,67 @@ export default function AccountPage() {
                 </div>
               </motion.div>
 
-              {/* Tercihler */}
+              {/* ── Tercihler ── */}
               <motion.div {...fadeUp(0.14)} className="card">
                 <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Tercihler</h2>
-                <div className="space-y-1">
-                  {[
-                    { icon: Bell, label: "Bildirimler", desc: "Uygulama bildirimleri", soon: true },
-                    { icon: Moon, label: "Koyu Tema", desc: "Görünüm tercihi", soon: true },
-                    { icon: Globe, label: "Dil", desc: "Türkçe", soon: true },
-                  ].map(({ icon: Icon, label, desc, soon }) => (
-                    <div key={label} className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-gray-700/60 last:border-0">
-                      <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-4 h-4 text-gray-500" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{desc}</p>
-                      </div>
-                      {soon && (
-                        <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
-                          Yakında
-                        </span>
-                      )}
+                <div className="space-y-4">
+                  {/* Tema */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Moon className="w-4 h-4 text-gray-500" />
                     </div>
-                  ))}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Görünüm</p>
+                      <ThemeSelector />
+                    </div>
+                  </div>
+
+                  {/* Dil */}
+                  <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
+                    <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Globe className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-0.5">Dil</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Uygulama dili</p>
+                    </div>
+                    <LangSelector />
+                  </div>
+
+                  {/* Bildirimler */}
+                  <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
+                    <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Bell className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Bildirimler</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Uygulama bildirimleri</p>
+                    </div>
+                    <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
+                      Yakında
+                    </span>
+                  </div>
                 </div>
               </motion.div>
 
-              {/* Güvenlik */}
+              {/* ── Güvenlik ── */}
               <motion.div {...fadeUp(0.2)} className="card">
                 <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Güvenlik</h2>
-                <div className="space-y-1">
-                  {[
-                    { icon: Shield, label: "İki Faktörlü Doğrulama", desc: "Hesabını daha güvenli yap", soon: true },
-                  ].map(({ icon: Icon, label, desc, soon }) => (
-                    <div key={label} className="flex items-center gap-3 py-3">
-                      <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-4 h-4 text-gray-500" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{desc}</p>
-                      </div>
-                      {soon && (
-                        <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
-                          Yakında
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">İki Faktörlü Doğrulama</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">Hesabını daha güvenli yap</p>
+                  </div>
+                  <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
+                    Yakında
+                  </span>
                 </div>
               </motion.div>
 
-              {/* Finansal Profil kısayolları */}
+              {/* ── Finansal Profil ── */}
               <motion.div {...fadeUp(0.26)} className="card p-0 overflow-hidden">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3 border-b border-gray-100 dark:border-gray-700">
                   Finansal Profilim
@@ -263,7 +432,7 @@ export default function AccountPage() {
                 </Link>
               </motion.div>
 
-              {/* Çıkış */}
+              {/* ── Çıkış ── */}
               <motion.div {...fadeUp(0.3)}>
                 <button
                   onClick={() => {

@@ -5,6 +5,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.agents.orchestrator import run_orchestrator
 from app.agents.conversation_agent import ConversationAgent
+from app.agents.security_agent import SecurityAgent
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
 from app.core.security import get_current_user
@@ -25,6 +26,25 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
     try:
         db = SupabaseService()
         llm = LLMService()
+
+        # ── Güvenlik kontrolü ─────────────────────────────────────────
+        security_agent = SecurityAgent(llm=llm, db=db)
+        sec_result = await security_agent.execute({
+            "action_type": "check_content",
+            "content": body.message,
+            "user_id": user_id,
+            "content_type": "message",
+        })
+        if not sec_result.get("is_safe", True):
+            action = sec_result.get("action", "block")
+            if action in ("block", "ban"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=sec_result.get("reason") or "Mesajınız güvenlik kontrolünden geçemedi.",
+                )
+            # warn: devam et ama temizlenmiş içeriği kullan
+            if sec_result.get("clean_content"):
+                body = ChatRequest(message=sec_result["clean_content"])
 
         history = await db.get_chat_history(user_id, limit=6)
 
