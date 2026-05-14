@@ -20,7 +20,7 @@ from typing import Optional
 from app.agents.watchlist_agent import WatchlistAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
-from app.api.routes.auth import get_current_user
+from app.core.security import get_current_user
 from app.core.logger import get_logger
 
 router = APIRouter()
@@ -54,7 +54,7 @@ def _agent() -> WatchlistAgent:
 @router.get("/", summary="Takip listesini getir")
 async def get_watchlist(current_user: dict = Depends(get_current_user)):
     """Kullanıcının aktif takip listesini döner."""
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     agent = _agent()
     result = await agent.execute({"user_id": user_id, "mode": "list"})
     if not result.get("success"):
@@ -68,7 +68,7 @@ async def add_to_watchlist(
     current_user: dict = Depends(get_current_user),
 ):
     """Yıldızlanan ürünü takip listesine ekler."""
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     agent = _agent()
     result = await agent.execute({
         "user_id": user_id,
@@ -86,7 +86,7 @@ async def remove_from_watchlist(
     current_user: dict = Depends(get_current_user),
 ):
     """Belirtilen takip listesi kaydını devre dışı bırakır (soft delete)."""
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     agent = _agent()
     result = await agent.execute({
         "user_id": user_id,
@@ -104,7 +104,7 @@ async def check_prices(current_user: dict = Depends(get_current_user)):
     Takip listesindeki tüm ürünleri PARALEL olarak SerpAPI'den kontrol eder.
     İndirim tespit edilirse (per-ürün eşiğe göre) bildirim oluşturulur.
     """
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     agent = _agent()
     result = await agent.execute({"user_id": user_id, "mode": "check"})
     if not result.get("success"):
@@ -121,7 +121,7 @@ async def get_price_history(
     Belirtilen takip listesi ürününün kaydedilmiş fiyat geçmişini ve
     7 günlük trend etiketini döner.
     """
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     agent = _agent()
     result = await agent.execute({
         "user_id": user_id,
@@ -142,7 +142,7 @@ async def update_alert_threshold(
     """Belirtilen ürün için alarm tetiklenme eşiğini günceller."""
     if not (0.5 <= threshold_pct <= 90.0):
         raise HTTPException(status_code=422, detail="Eşik %0.5 ile %90 arasında olmalı")
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     db = SupabaseService()
     try:
         db.client.table("watchlist").update({"alert_threshold_pct": threshold_pct}).eq(
@@ -164,7 +164,7 @@ async def get_notifications(
     current_user: dict = Depends(get_current_user),
 ):
     """Kullanıcının fiyat düşüş bildirimlerini döner."""
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     db = SupabaseService()
     try:
         q = (
@@ -192,28 +192,10 @@ async def get_notifications(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/notifications/{notification_id}/read", summary="Bildirimi okundu işaretle")
-async def mark_notification_read(
-    notification_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Belirtilen bildirimi okundu olarak işaretler."""
-    user_id = current_user["id"]
-    db = SupabaseService()
-    try:
-        db.client.table("notifications").update({"is_read": True}).eq(
-            "id", notification_id
-        ).eq("user_id", user_id).execute()
-        return {"success": True, "message": "Bildirim okundu olarak işaretlendi."}
-    except Exception as e:
-        logger.error(f"Bildirim güncelleme hatası: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.patch("/notifications/read-all", summary="Tüm bildirimleri okundu işaretle")
 async def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
     """Kullanıcının tüm okunmamış bildirimlerini okundu yapar."""
-    user_id = current_user["id"]
+    user_id = current_user["sub"]
     db = SupabaseService()
     try:
         db.client.table("notifications").update({"is_read": True}).eq(
@@ -222,4 +204,22 @@ async def mark_all_notifications_read(current_user: dict = Depends(get_current_u
         return {"success": True, "message": "Tüm bildirimler okundu olarak işaretlendi."}
     except Exception as e:
         logger.error(f"Toplu bildirim güncelleme hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/notifications/{notification_id}/read", summary="Bildirimi okundu işaretle")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Belirtilen bildirimi okundu olarak işaretler."""
+    user_id = current_user["sub"]
+    db = SupabaseService()
+    try:
+        db.client.table("notifications").update({"is_read": True}).eq(
+            "id", notification_id
+        ).eq("user_id", user_id).execute()
+        return {"success": True, "message": "Bildirim okundu olarak işaretlendi."}
+    except Exception as e:
+        logger.error(f"Bildirim güncelleme hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))

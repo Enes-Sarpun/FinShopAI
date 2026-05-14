@@ -7,7 +7,7 @@ from app.prompts.security_prompts import (
     FAKE_REVIEW_DETECTION_PROMPT,
     RATE_LIMIT_PROMPT
 )
-from datetime import datetime
+from datetime import datetime, timezone
 
 class SecurityAgent(BaseAgent):
     def __init__(self, llm: LLMService, db: SupabaseService):
@@ -173,13 +173,22 @@ class SecurityAgent(BaseAgent):
     async def _log_violation(self, user_id: str, content: str, moderation: dict):
         try:
             if moderation.get("violations") or not moderation.get("is_safe", True):
+                # "anonymous" gibi UUID olmayan değerler NULL olarak kaydedilir
+                safe_user_id = None
+                try:
+                    import uuid
+                    uuid.UUID(str(user_id))
+                    safe_user_id = user_id
+                except (ValueError, AttributeError):
+                    pass
+
                 self.db.client.table("security_logs").insert({
-                    "user_id": user_id,
+                    "user_id": safe_user_id,
                     "content": content[:500],
                     "risk_level": moderation.get("risk_level", "low"),
                     "action": moderation.get("action", "allow"),
                     "violations": str(moderation.get("violations", [])),
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 }).execute()
         except Exception as e:
             self.logger.error(f"Log yazma hatası: {e}")
@@ -189,7 +198,7 @@ class SecurityAgent(BaseAgent):
             self.db.client.table("profiles").update({
                 "is_banned": True,
                 "ban_reason": reason,
-                "banned_at": datetime.utcnow().isoformat()
+                "banned_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", user_id).execute()
             self.logger.info(f"Kullanıcı banlandı: {user_id}")
         except Exception as e:

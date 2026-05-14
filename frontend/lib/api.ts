@@ -133,9 +133,8 @@ export const watchlistApi = {
     apiFetch(`/api/watchlist/${id}/history`),
 
   updateThreshold: (id: string, threshold: number) =>
-    apiFetch(`/api/watchlist/${id}/threshold`, {
+    apiFetch(`/api/watchlist/${id}/threshold?threshold_pct=${threshold}`, {
       method: "PATCH",
-      body: JSON.stringify({ alert_threshold_pct: threshold }),
     }),
 
   notifications: (limit = 20) =>

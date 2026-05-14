@@ -294,6 +294,31 @@
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* ─────────────────────────────────────────────────────────
+   YILDIZ ANİMASYONU (WishlistWidget)
+───────────────────────────────────────────────────────── */
+@keyframes star-pop {
+  0%   { transform: scale(1) rotate(0deg); }
+  30%  { transform: scale(1.5) rotate(20deg); }
+  60%  { transform: scale(0.9) rotate(-10deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.animate-star-pop {
+  animation: star-pop 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.drop-shadow-star {
+  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.7));
+}
+
+/* Toast slide-in */
+@keyframes slide-in-right {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─────────────────────────────────────────────────────────
    PREFERS-REDUCED-MOTION (D.3)
 ───────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

@@ -6,8 +6,10 @@ import { chatApi, authApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
-import { Send, Sparkles, ShoppingBag, Trash2 } from "lucide-react";
+import { Send, Sparkles, ShoppingBag, Trash2, Star } from "lucide-react";
 import Image from "next/image";
+import toast from "react-hot-toast";
+import { wishlistService } from "@/lib/wishlistService";
 import Sidebar from "@/app/dashboard/components/Sidebar";
 
 function storageKey(id: string | null) {
@@ -395,36 +397,97 @@ function ProductsMessage({ products, topPick, advice }: {
 }
 
 function ProductCard({ product }: { product: Product }) {
+  const [starred, setStarred] = useState(false);
+  const [popping, setPopping] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setStarred(wishlistService.isStarred(product.name));
+  }, [product.name]);
+
+  async function handleStar(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    setPopping(true);
+    setTimeout(() => setPopping(false), 500);
+
+    try {
+      if (starred) {
+        const items = await wishlistService.getAll();
+        const item = items.find((i) => i.product_name === product.name);
+        if (item) await wishlistService.remove(item.id);
+        setStarred(false);
+        toast("Takipten çıkarıldı", { icon: "☆" });
+      } else {
+        await wishlistService.add({
+          name: product.name,
+          price: product.price,
+          url: product.url,
+          image_url: product.image_url,
+          seller: product.seller,
+        });
+        setStarred(true);
+        toast.success("Takip listesine eklendi! Fiyatı düşünce haber vereceğiz 🔔");
+      }
+    } catch {
+      toast.error("Bir hata oluştu, tekrar dene.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <motion.a
-      href={product.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex gap-3 bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl p-3 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40 transition-all group"
-      style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.15 }}
-    >
-      {product.image_url ? (
-        <div className="relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
-          <Image src={product.image_url} alt={product.name} fill className="object-cover" unoptimized />
-        </div>
-      ) : (
-        <div className="w-16 h-16 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-          <ShoppingBag className="w-6 h-6 text-blue-400" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 leading-snug group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{product.name}</p>
-        <p className="text-base font-bold text-blue-600 dark:text-blue-400 mt-1 font-numeric">{formatPrice(product.price)}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <p className="text-xs text-gray-400">{product.seller}</p>
-          {product.rating > 0 && <p className="text-xs text-amber-500">★ {product.rating}</p>}
-        </div>
-        {product.recommendation_reason && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-1">{product.recommendation_reason}</p>
+    <div className="relative">
+      <motion.a
+        href={product.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex gap-3 bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl p-3 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40 transition-all group"
+        style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+        whileHover={{ y: -2 }}
+        transition={{ duration: 0.15 }}
+      >
+        {product.image_url ? (
+          <div className="relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
+            <Image src={product.image_url} alt={product.name} fill className="object-cover" unoptimized />
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+            <ShoppingBag className="w-6 h-6 text-blue-400" />
+          </div>
         )}
-      </div>
-    </motion.a>
+        <div className="flex-1 min-w-0 pr-8">
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 leading-snug group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{product.name}</p>
+          <p className="text-base font-bold text-blue-600 dark:text-blue-400 mt-1 font-numeric">{formatPrice(product.price)}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-xs text-gray-400">{product.seller}</p>
+            {product.rating > 0 && <p className="text-xs text-amber-500">★ {product.rating}</p>}
+          </div>
+          {product.recommendation_reason && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-1">{product.recommendation_reason}</p>
+          )}
+        </div>
+      </motion.a>
+
+      {/* Yıldız butonu — kartın dışında z-index ile üstte */}
+      <button
+        onClick={handleStar}
+        disabled={loading}
+        className="absolute top-2.5 right-2.5 z-10 p-1.5 rounded-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-all shadow-sm"
+        title={starred ? "Takipten çıkar" : "Fiyat takibine al"}
+      >
+        <Star
+          className={[
+            "w-4 h-4 transition-all duration-200",
+            popping ? "animate-star-pop" : "",
+            starred
+              ? "fill-yellow-400 text-yellow-400 drop-shadow-star"
+              : "text-gray-400 hover:text-yellow-400",
+          ].join(" ")}
+        />
+      </button>
+    </div>
   );
 }
