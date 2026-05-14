@@ -1,12 +1,71 @@
+"""
+Search Agent — Geliştirilmiş Sürüm
+=====================================
+Değişiklikler:
+  - Ürün deduplikasyonu (isim benzerliği > 80%)
+  - Karşılaştırma modu desteği (is_comparison flag)
+  - Daha fazla satıcı URL mapping
+  - Fiyat parse iyileştirmesi (TL, ₺, virgül/nokta)
+  - Senkron SerpAPI çağrısı hatasız asyncio.to_thread ile sarılı (zaten vardı)
+"""
+
 import asyncio
+import urllib.parse
+from difflib import SequenceMatcher
+
 from app.agents.base_agent import BaseAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from app.core.config import settings
 from serpapi import GoogleSearch
-import urllib.parse
 from app.prompts.search_prompts import SEARCH_QUERY_PROMPT
 from app.prompts.review_prompts import REVIEW_ANALYSIS_PROMPT
+
+
+def _similarity(a: str, b: str) -> float:
+    """İki string arasındaki benzerlik oranı (0-1)."""
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def _deduplicate(products: list, threshold: float = 0.80) -> list:
+    """
+    İsim benzerliği yüksek ürünleri çıkar.
+    Daha düşük fiyatlı olanı (veya ilk geleni) tutar.
+    """
+    unique = []
+    for p in products:
+        name = p.get("name", "")
+        is_dup = False
+        for u in unique:
+            if _similarity(name, u.get("name", "")) >= threshold:
+                # Daha ucuz olanı tut
+                if p.get("price", 0) < u.get("price", float("inf")):
+                    unique.remove(u)
+                    unique.append(p)
+                is_dup = True
+                break
+        if not is_dup:
+            unique.append(p)
+    return unique
+
+
+# Satıcı → URL mapping (genişletilmiş)
+_SELLER_URL_MAP = {
+    "trendyol": lambda q: f"https://www.trendyol.com/sr?q={q}",
+    "amazon": lambda q: f"https://www.amazon.com.tr/s?k={q}",
+    "hepsiburada": lambda q: f"https://www.hepsiburada.com/ara?q={q}",
+    "mediamarkt": lambda q: f"https://www.mediamarkt.com.tr/tr/search.html?query={q}",
+    "teknosa": lambda q: f"https://www.teknosa.com/arama/?text={q}",
+    "vatanbilgisayar": lambda q: f"https://www.vatanbilgisayar.com/ara/?q={q}",
+    "itopya": lambda q: f"https://www.itopya.com/arama.aspx?q={q}",
+    "n11": lambda q: f"https://www.n11.com/arama?q={q}",
+    "gittigidiyor": lambda q: f"https://www.gittigidiyor.com/arama?k={q}",
+    "çiçeksepeti": lambda q: f"https://www.ciceksepeti.com/arama?term={q}",
+    "morhipo": lambda q: f"https://www.morhipo.com/search?search={q}",
+    "boyner": lambda q: f"https://www.boyner.com.tr/arama?searchTerm={q}",
+    "lcwaikiki": lambda q: f"https://www.lcwaikiki.com/tr-TR/TR/search?q={q}",
+    "zara": lambda q: f"https://www.zara.com/tr/tr/search?searchTerm={q}",
+}
 
 
 class SearchAgent(BaseAgent):
@@ -17,11 +76,14 @@ class SearchAgent(BaseAgent):
         query = input_data.get("query", "")
         budget = input_data.get("budget", None)
         user_id = input_data.get("user_id", None)
+        is_comparison = input_data.get("is_comparison", False)
+        comparison_products = input_data.get("comparison_products", [])
 
-        self.logger.info(f"Arama başladı: {query}")
+        self.logger.info(f"Arama başladı: {query} | comparison={is_comparison}")
 
         # 1. LLM ile sorguyu parse et
         llm_parse_ok = False
+        parsed = {}
         try:
             parsed = await self.call_llm_json(
                 SEARCH_QUERY_PROMPT.format(query=query)
@@ -32,40 +94,58 @@ class SearchAgent(BaseAgent):
             llm_parse_ok = True
         except Exception as e:
             self.logger.error(f"Sorgu parse hatası (LLM fallback aktif): {e}")
-            parsed = {}
 
-        # 2. Arama sorgusunu LLM'in ürettiği tag'lerden oluştur
-        # LLM başarısız olduysa ham sorgudan anahtar kelime çıkar
+        # 2. Arama sorgusunu oluştur
         tags = parsed.get("tags", [])
         if tags:
             search_query = " ".join(tags)
         elif not llm_parse_ok:
-            # LLM rate limit veya hata — ham sorgudan ilk 5 kelimeyi al
             words = query.split()
             search_query = " ".join(words[:5]) if len(words) > 5 else query
-            self.logger.info(f"LLM fallback: kısaltılmış sorgu kullanılıyor")
         else:
             search_query = query
+
         self.logger.info(f"Search query: {search_query} | budget: {budget}")
 
-        # 3. SerpAPI ile Google Shopping'den ürün çek (senkron → thread'de çalıştır)
-        products = await asyncio.to_thread(self._search_google_shopping_sync, search_query, budget)
+        # 3. SerpAPI ile ürün çek
+        products = await asyncio.to_thread(
+            self._search_google_shopping_sync, search_query, budget
+        )
 
-        # Sonuç boşsa ve LLM parse başarılıysa kısa tag'lerle tekrar dene
+        # Boş sonuçta ham sorgu ile tekrar dene
         if not products and tags and search_query != query:
-            self.logger.info("Tag sorgusu sonuç vermedi, ham sorgu ile tekrar deneniyor")
-            fallback_words = query.split()
-            fallback_query = " ".join(fallback_words[:5]) if len(fallback_words) > 5 else query
-            products = await asyncio.to_thread(self._search_google_shopping_sync, fallback_query, budget)
+            self.logger.info("Tag sorgusu boş, ham sorgu ile tekrar deneniyor")
+            words = query.split()
+            fallback = " ".join(words[:5]) if len(words) > 5 else query
+            products = await asyncio.to_thread(
+                self._search_google_shopping_sync, fallback, budget
+            )
 
-        # 4. Her ürün için LLM ile öneri nedeni üret
-        occasion = parsed.get("occasion") or ""
-        recipient = parsed.get("recipient") or ""
+        # Karşılaştırma modunda: her ürün için ayrı arama yap
+        if is_comparison and comparison_products and len(products) < 2:
+            self.logger.info("Karşılaştırma modu: ayrı aramalar yapılıyor")
+            all_products = []
+            for cp in comparison_products[:3]:
+                cp_products = await asyncio.to_thread(
+                    self._search_google_shopping_sync, cp, budget
+                )
+                if cp_products:
+                    all_products.append(cp_products[0])  # Her ürünün en iyisi
+            if all_products:
+                products = all_products
+
+        # 4. Deduplikasyon
+        before = len(products)
+        products = _deduplicate(products)
+        if before != len(products):
+            self.logger.info(f"Deduplicated: {before} → {len(products)} ürün")
+
+        # 5. İlk 3 ürün için LLM öneri nedeni üret
         for product in products[:3]:
             reason = await self._generate_reason(product, occasion, recipient)
             product["recommendation_reason"] = reason
 
-        # 3. Supabase'e kaydet
+        # 6. Supabase'e kaydet
         if user_id and products:
             await self._save_to_supabase(user_id, query, products)
 
@@ -73,11 +153,9 @@ class SearchAgent(BaseAgent):
             "query": query,
             "category": parsed.get("category", ""),
             "gift_context": parsed.get("gift_context", False),
-            "occasion": parsed.get("occasion", ""),
-            "recipient": parsed.get("recipient", ""),
-            "recipient_age_group": parsed.get("recipient_age_group", ""),
+            "is_comparison": is_comparison,
             "total_found": len(products),
-            "products": products
+            "products": products,
         }
 
     def _search_google_shopping_sync(self, query: str, budget: float = None) -> list:
@@ -91,67 +169,40 @@ class SearchAgent(BaseAgent):
                 "tbm": "shop",
                 "gl": "tr",
                 "hl": "tr",
-                "api_key": settings.SERPAPI_KEY
+                "api_key": settings.SERPAPI_KEY,
             }
 
             search = GoogleSearch(params)
             results = search.get_dict()
 
             products = []
-            for item in results.get("shopping_results", [])[:10]:
+            for item in results.get("shopping_results", [])[:12]:
                 price_raw = item.get("price", "0")
-                try:
-                    cleaned = (
-                        price_raw.replace("₺", "")
-                        .replace("TL", "")
-                        .replace("\xa0", "")
-                        .strip()
-                    )
-                    # Türkçe format: "13.999,00" → binlik=nokta, ondalık=virgül
-                    # İngilizce format: "13,999.00" → binlik=virgül, ondalık=nokta
-                    if "," in cleaned and "." in cleaned:
-                        # Her iki sembol var — hangisi ondalık?
-                        if cleaned.rindex(".") > cleaned.rindex(","):
-                            # son sembol nokta → İngilizce format
-                            price = float(cleaned.replace(",", ""))
-                        else:
-                            # son sembol virgül → Türkçe format
-                            price = float(cleaned.replace(".", "").replace(",", "."))
-                    elif "," in cleaned:
-                        # Sadece virgül var → Türkçe ondalık ayraç
-                        price = float(cleaned.replace(",", "."))
-                    else:
-                        # Sadece nokta var (binlik ya da ondalık)
-                        # 3 haneli grupsa binlik, değilse ondalık
-                        parts = cleaned.split(".")
-                        if len(parts) == 2 and len(parts[1]) == 3:
-                            price = float(cleaned.replace(".", ""))
-                        else:
-                            price = float(cleaned)
-                except Exception:
-                    price = 0
+                price = self._parse_price(price_raw)
 
                 # Bütçeyi aşıyorsa veya parse edilemeden 0 kaldıysa atla
                 if budget and (price == 0 or price > float(budget)):
                     continue
 
-                # SerpAPI Google Shopping'de product_id "product_id" veya
-                # link içindeki "product" parametresinden gelir
                 serpapi_product_id = (
                     item.get("product_id")
                     or item.get("serpapi_product_api_properties", {}).get("product_id")
                 )
 
+                seller = item.get("source", "")
+                name = item.get("title", "")
+
                 products.append({
-                    "name": item.get("title", ""),
+                    "name": name,
                     "price": price,
-                    "seller": item.get("source", ""),
-                    "rating": float(item.get("rating", 0)),
+                    "seller": seller,
+                    "rating": float(item.get("rating", 0) or 0),
+                    "rating_count": int(item.get("reviews", 0) or 0),
                     "description": item.get("snippet", ""),
-                    "url": self._generate_url(item.get("title", ""), item.get("source", "")),
+                    "url": self._generate_url(name, seller),
                     "image_url": item.get("thumbnail", ""),
                     "recommendation_reason": "",
-                    "serpapi_product_id": serpapi_product_id  # Review Agent bunu kullanacak
+                    "serpapi_product_id": serpapi_product_id,
                 })
 
             return products
@@ -160,22 +211,39 @@ class SearchAgent(BaseAgent):
             self.logger.error(f"SerpAPI hatası: {e}")
             return []
 
+    @staticmethod
+    def _parse_price(price_raw: str) -> float:
+        """Fiyat string'ini float'a çevir. Türk formatı: 1.234,56 TL"""
+        try:
+            cleaned = (
+                price_raw
+                .replace("₺", "")
+                .replace("TL", "")
+                .replace("\xa0", "")
+                .strip()
+            )
+            # Türk formatı: nokta binlik ayraç, virgül ondalık
+            if "," in cleaned and "." in cleaned:
+                # 1.234,56 → 1234.56
+                cleaned = cleaned.replace(".", "").replace(",", ".")
+            elif "," in cleaned:
+                # 1234,56 → 1234.56
+                cleaned = cleaned.replace(",", ".")
+            else:
+                # 1.234 → 1234
+                if cleaned.count(".") == 1 and len(cleaned.split(".")[-1]) == 3:
+                    cleaned = cleaned.replace(".", "")
+            return float(cleaned)
+        except Exception:
+            return 0.0
+
     def _generate_url(self, product_name: str, seller: str) -> str:
         encoded = urllib.parse.quote(product_name)
         seller_lower = seller.lower()
-
-        if "trendyol" in seller_lower:
-            return f"https://www.trendyol.com/sr?q={encoded}"
-        elif "amazon" in seller_lower:
-            return f"https://www.amazon.com.tr/s?k={encoded}"
-        elif "hepsiburada" in seller_lower:
-            return f"https://www.hepsiburada.com/ara?q={encoded}"
-        elif "mediamarkt" in seller_lower:
-            return f"https://www.mediamarkt.com.tr/tr/search.html?query={encoded}"
-        elif "teknosa" in seller_lower:
-            return f"https://www.teknosa.com/arama/?text={encoded}"
-        else:
-            return f"https://www.google.com/search?q={encoded}+sat%C4%B1n+al"
+        for key, url_fn in _SELLER_URL_MAP.items():
+            if key in seller_lower:
+                return url_fn(encoded)
+        return f"https://www.google.com/search?q={encoded}+satın+al"
 
     async def _generate_reason(self, product: dict, occasion: str = "", recipient: str = "") -> str:
         try:
@@ -183,6 +251,10 @@ class SearchAgent(BaseAgent):
                 product_name=product.get("name", ""),
                 price=product.get("price", ""),
                 source=product.get("seller", ""),
+            )
+            return await self.call_llm(prompt)
+        except Exception as e:
+            self.logger.error(f"LLM öneri nedeni hatası: {e}")
                 occasion=occasion or "belirtilmedi",
                 recipient=recipient or "belirtilmedi",
             )
@@ -196,6 +268,7 @@ class SearchAgent(BaseAgent):
             recipient_text = f"{recipient}'a " if recipient else ""
             return (
                 f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
+                f"Bütçenize uygun bu ürün kaliteli bir seçenek olarak öne çıkmaktadır."
                 f"{occasion_text}{recipient_text}bütçenize uygun kaliteli bir seçenek olarak öne çıkmaktadır."
             )
 
