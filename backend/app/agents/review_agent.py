@@ -127,12 +127,23 @@ class ReviewAgent(BaseAgent):
 
     async def _save_reviews(self, product_id: str, reviews: list):
         try:
+            # Duplikasyon kontrolü — zaten varsa tekrar ekleme
+            existing = self.db.client.table("mock_reviews") \
+                .select("id") \
+                .eq("product_id", product_id) \
+                .limit(1) \
+                .execute()
+            if existing.data:
+                self.logger.info(f"Ürün {product_id} için yorumlar zaten mevcut, atlaniyor")
+                return
+
             rows = [
                 {
                     "product_id": product_id,
                     "rating": r.get("rating"),
                     "comment": r.get("comment"),
                     "sentiment": r.get("sentiment"),
+                    "is_ai_generated": True,
                 }
                 for r in reviews
             ]

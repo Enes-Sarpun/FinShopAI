@@ -140,10 +140,12 @@ class SearchAgent(BaseAgent):
         if before != len(products):
             self.logger.info(f"Deduplicated: {before} → {len(products)} ürün")
 
-        # 5. İlk 3 ürün için LLM öneri nedeni üret
-        for product in products[:3]:
-            reason = await self._generate_reason(product, occasion, recipient)
-            product["recommendation_reason"] = reason
+        # 5. İlk 3 ürün için LLM öneri nedeni üret (BATCH — tek çağrı)
+        top_products = products[:3]
+        if top_products:
+            reasons = await self._generate_reasons_batch(top_products, occasion, recipient)
+            for i, product in enumerate(top_products):
+                product["recommendation_reason"] = reasons.get(str(i + 1), "")
 
         # 6. Supabase'e kaydet
         if user_id and products:
@@ -192,6 +194,10 @@ class SearchAgent(BaseAgent):
                 seller = item.get("source", "")
                 name = item.get("title", "")
 
+                # SerpAPI gerçek URL'i varsa onu kullan, yoksa üret
+                real_link = item.get("link") or item.get("product_link")
+                product_url = real_link if real_link else self._generate_url(name, seller)
+
                 products.append({
                     "name": name,
                     "price": price,
@@ -199,7 +205,7 @@ class SearchAgent(BaseAgent):
                     "rating": float(item.get("rating", 0) or 0),
                     "rating_count": int(item.get("reviews", 0) or 0),
                     "description": item.get("snippet", ""),
-                    "url": self._generate_url(name, seller),
+                    "url": product_url,
                     "image_url": item.get("thumbnail", ""),
                     "recommendation_reason": "",
                     "serpapi_product_id": serpapi_product_id,
@@ -257,15 +263,47 @@ class SearchAgent(BaseAgent):
             return await self.call_llm(prompt)
         except Exception as e:
             self.logger.error(f"LLM öneri hatası: {e}")
-            price = product.get("price", 0)
-            seller = product.get("seller", "")
-            name = product.get("name", "")
-            occasion_text = f"{occasion} için " if occasion else ""
-            recipient_text = f"{recipient}'a " if recipient else ""
-            return (
-                f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
-                f"{occasion_text}{recipient_text}bütçenize uygun kaliteli bir seçenek olarak öne çıkmaktadır."
+            return self._fallback_reason(product, occasion, recipient)
+
+    async def _generate_reasons_batch(self, products: list, occasion: str = "", recipient: str = "") -> dict:
+        """3 ürünü tek LLM çağrısında işle — batch prompting."""
+        product_lines = []
+        for i, p in enumerate(products, 1):
+            product_lines.append(
+                f"{i}. {p.get('name', '')} | Fiyat: {p.get('price', 0):,.0f} TL | "
+                f"Satıcı: {p.get('seller', '')}"
             )
+
+        prompt = (
+            f"Aşağıdaki {len(products)} ürün için kısa birer öneri nedeni yaz.\n"
+            f"Durum: {occasion or 'belirtilmedi'} | Kime: {recipient or 'belirtilmedi'}\n\n"
+            + "\n".join(product_lines) + "\n\n"
+            "JSON formatında yanıt ver:\n"
+            '{"1": "ürün 1 öneri nedeni", "2": "ürün 2 öneri nedeni", "3": "ürün 3 öneri nedeni"}\n'
+            "SADECE JSON DÖNDÜR."
+        )
+
+        try:
+            result = await self.call_llm_json(prompt)
+            return {str(k): str(v) for k, v in result.items()}
+        except Exception as e:
+            self.logger.error(f"Batch reason hatası: {e}")
+            return {
+                str(i + 1): self._fallback_reason(p, occasion, recipient)
+                for i, p in enumerate(products)
+            }
+
+    @staticmethod
+    def _fallback_reason(product: dict, occasion: str = "", recipient: str = "") -> str:
+        price = product.get("price", 0)
+        seller = product.get("seller", "")
+        name = product.get("name", "")
+        occasion_text = f"{occasion} için " if occasion else ""
+        recipient_text = f"{recipient}'a " if recipient else ""
+        return (
+            f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
+            f"{occasion_text}{recipient_text}bütçenize uygun kaliteli bir seçenek olarak öne çıkmaktadır."
+        )
 
     async def _save_to_supabase(self, user_id: str, query: str, products: list):
         try:

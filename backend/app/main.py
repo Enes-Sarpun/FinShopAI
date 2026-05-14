@@ -37,7 +37,24 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(security.router, prefix="/api/security", tags=["security"])
 app.include_router(watchlist.router, prefix="/api/watchlist", tags=["watchlist"])
 
+import time as _time
+_start_time = _time.monotonic()
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "FinShop AI"}
+    uptime = round(_time.monotonic() - _start_time, 1)
+    checks = {"api": True, "db": False, "llm": False}
+    try:
+        from app.services.supabase_service import SupabaseService
+        db = SupabaseService()
+        db.client.table("profiles").select("id").limit(1).execute()
+        checks["db"] = True
+    except Exception:
+        pass
+    try:
+        import google.generativeai as genai
+        checks["llm"] = bool(genai.get_model(f"models/{settings.GEMINI_MODEL}"))
+    except Exception:
+        pass
+    overall = "ok" if all(checks.values()) else "degraded"
+    return {"status": overall, "service": "FinShop AI", "uptime_s": uptime, "checks": checks}

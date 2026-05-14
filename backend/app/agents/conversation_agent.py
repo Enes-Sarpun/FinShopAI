@@ -45,69 +45,6 @@ COMPARISON_KEYWORDS = [
     "mı alsam", "mi alsam", "karşılaştır", "farkı ne", "hangisi daha",
     "hangisini", "arasında", "vs ", " vs", "veya", "yoksa", "mı yoksa",
     "mi yoksa", "mu yoksa", "mü yoksa",
-from app.agents.base_agent import BaseAgent
-
-# ── System prompt ────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Sen FinShop AI'sın — kullanıcının kişisel finansal alışveriş asistanısın.
-
-KİŞİLİĞİN:
-- Samimi, sıcak ve arkadaş canlısısın; robot gibi değil, gerçek bir arkadaş gibi konuşursun
-- Türkçe'de günlük dil kullan, resmi olmayan ama saygılı bir ton
-- Mizahı seversin ama yerinde kullanırsın
-- Yargılamadan, destekleyerek yaklaşırsın
-- Kullanıcının adını biliyorsan kullan ("Enes, şöyle yapabilirsin...")
-
-NASIL CEVAP VERMELİSİN:
-
-1. SOHBET (selam, naber, teşekkür, vb.) ise:
-   - Doğal, kısa ve sıcak yanıt ver
-   - ÖNERİ SUNMA — sadece sohbet et
-   - Gerekirse açık uçlu soru sor
-
-2. DUYGUSAL İFADE varsa:
-   - Önce duyguyu kabul et ("Anlıyorum, zor olabiliyor")
-   - Sonra yavaşça yardım öner
-
-3. ÜRÜN / ALIŞVERİŞ isteği ise:
-   - is_product_request: true döndür
-
-KAÇINMAN GEREKEN İFADELER:
-- "Önerebileceğim başka bir şey var mı?" (her mesajda otomatik)
-- "Size nasıl yardımcı olabilirim?" (selamlamaya otomatik tepki)
-- Özellik listesi dökmek
-- "Ben bir yapay zekayım, duygularım yok" — bunu ASLA söyleme
-
-JSON cevap formatı:
-{
-  "is_product_request": true/false,
-  "reply": "sohbetse veya duygusal ifadeyse kısa samimi yanıt"
-}
-"""
-
-# ── Keyword tabanlı hızlı sınıflandırıcı ────────────────────────────────────
-PRODUCT_KEYWORDS = [
-    "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
-    "ucuz", "fiyat", "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
-    "kamera", "tablet", "saat", "ayakkabı", "giysi", "giyim", "kitap", "oyun",
-    "tl", "lira", "bütçe", "indirim", "kampanya", "sipariş", "alabil",
-    "tavsiye", "öneri", "seçenek", "model", "marka", "fiyatı ne",
-]
-
-# Bunlar varsa kesinlikle sohbet — ürün isteği değil
-SMALL_TALK_PATTERNS = [
-    "selam", "merhaba", "naber", "nasılsın", "nasilsin", "ne haber",
-    "teşekkür", "tesekkur", "sağol", "sagol", "eyvallah", "tamam", "ok",
-    "görüşürüz", "gorusuruz", "iyi geceler", "iyi günler", "günaydın",
-    "gunaydin", "iyi akşamlar", "bay bay", "hoşça kal",
-    "kimsin", "ne yapabilirsin", "nasıl çalışıyorsun",
-    "harika", "süper", "çok güzel", "anladım", "evet", "hayır",
-    "peki", "tamamdır", "oldu", "biliyorum",
-]
-
-EMOTIONAL_PATTERNS = [
-    "param yetmiyor", "borcum var", "para sıkıntısı", "hiç param",
-    "para kalmadı", "zor durum", "sıkıntı", "üzgün", "moralim",
-    "gereksiz harcıyorum", "israf", "pişman",
 ]
 
 GREETING_WORDS = {
@@ -176,30 +113,6 @@ def _get_quick_reply(intent: str, message: str) -> str:
         return "Anlıyorum 😊 Başka bir konuda yardımcı olabilir miyim?"
 
     return "Başka bir konuda yardımcı olabilir miyim?"
-def _classify_intent(message: str) -> str:
-    """
-    Hızlı keyword tabanlı intent sınıflandırıcı.
-    Dönüş değerleri: 'small_talk' | 'product' | 'emotional' | 'unknown'
-    """
-    lower = message.lower().strip()
-
-    # Çok kısa tek kelime/harf — kesinlikle sohbet
-    if len(lower) <= 3:
-        return "small_talk"
-
-    # Small talk — kısa mesaj + anahtar kelime
-    if len(lower) < 50 and any(p in lower for p in SMALL_TALK_PATTERNS):
-        return "small_talk"
-
-    # Duygusal ifade
-    if any(p in lower for p in EMOTIONAL_PATTERNS):
-        return "emotional"
-
-    # Ürün isteği
-    if any(kw in lower for kw in PRODUCT_KEYWORDS):
-        return "product"
-
-    return "unknown"
 
 
 class ConversationAgent(BaseAgent):

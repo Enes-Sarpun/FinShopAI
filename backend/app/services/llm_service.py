@@ -29,15 +29,22 @@ class LLMService:
 
     # ── Ana üretim metodu (async, blocking Gemini thread'e taşındı) ──────────
     async def generate(self, prompt: str, system: str = None) -> str:
-        full_prompt = f"{system}\n\n{prompt}" if system else prompt
         last_error = None
+
+        # system_instruction varsa model'e ayrı parametre olarak ver
+        model = self.model
+        if system:
+            model = genai.GenerativeModel(
+                settings.GEMINI_MODEL,
+                system_instruction=system,
+            )
 
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 t0 = time.monotonic()
                 # Blocking SDK çağrısını ayrı thread'e taşı
                 response = await asyncio.to_thread(
-                    self.model.generate_content, full_prompt
+                    model.generate_content, prompt
                 )
                 elapsed = (time.monotonic() - t0) * 1000
 

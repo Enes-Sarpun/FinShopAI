@@ -112,3 +112,38 @@ export const chatApi = {
 
   deleteHistory: () => apiFetch("/api/chat/history", { method: "DELETE" }),
 };
+
+// ── Watchlist ─────────────────────────────────────
+export const watchlistApi = {
+  list: () => apiFetch("/api/watchlist/"),
+
+  add: (product: { name: string; price: number; url?: string; image_url?: string; seller?: string }) =>
+    apiFetch("/api/watchlist/", {
+      method: "POST",
+      body: JSON.stringify(product),
+    }),
+
+  remove: (id: string) =>
+    apiFetch(`/api/watchlist/${id}`, { method: "DELETE" }),
+
+  check: () =>
+    apiFetch("/api/watchlist/check", { method: "POST" }),
+
+  history: (id: string) =>
+    apiFetch(`/api/watchlist/${id}/history`),
+
+  updateThreshold: (id: string, threshold: number) =>
+    apiFetch(`/api/watchlist/${id}/threshold`, {
+      method: "PATCH",
+      body: JSON.stringify({ alert_threshold_pct: threshold }),
+    }),
+
+  notifications: (limit = 20) =>
+    apiFetch(`/api/watchlist/notifications?limit=${limit}`),
+
+  markRead: (id: string) =>
+    apiFetch(`/api/watchlist/notifications/${id}/read`, { method: "PATCH" }),
+
+  markAllRead: () =>
+    apiFetch("/api/watchlist/notifications/read-all", { method: "PATCH" }),
+};

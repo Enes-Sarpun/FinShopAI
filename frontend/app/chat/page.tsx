@@ -214,14 +214,13 @@ export default function ChatPage() {
       <div className="flex flex-col flex-1 min-w-0">
 
         {/* Üst bar — glassmorphism */}
-        <header className="flex items-center justify-between px-6 py-3 border-b border-white/60 dark:border-gray-700/60 flex-shrink-0"
-          style={{ background: "rgba(255,255,255,0.75)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+        <header className="flex items-center justify-between px-6 py-3 border-b border-white/60 dark:border-gray-700/60 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900">FinShop Asistanı</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">FinShop Asistanı</p>
               <p className="text-xs text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
                 Çevrimiçi
@@ -261,8 +260,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input — glassmorphism */}
-        <div className="border-t border-white/60 dark:border-gray-700/60 px-4 py-4 flex-shrink-0"
-          style={{ background: "rgba(255,255,255,0.75)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+        <div className="border-t border-white/60 dark:border-gray-700/60 px-4 py-4 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end gap-3 bg-white/80 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-400 transition-all shadow-sm">
               <textarea

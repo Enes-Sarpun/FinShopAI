@@ -172,7 +172,8 @@ class BudgetAgent(BaseAgent):
             # 1. Personality al (self.db - PersonalityAgent gibi!)
             personality = await self.db.get_personality(user_id)
             if not personality:
-                raise Exception("Personality profili bulunamadı. Önce kişilik testini tamamlayın.")
+                self.log_action("Personality bulunamadı, varsayılan profil kullanılıyor", {"user_id": user_id})
+                personality = {"spending_type": "dengeli", "risk_score": 5}
             
             spending_type = personality.get("spending_type", "dengeli")
             risk_score = personality.get("risk_score", 5)

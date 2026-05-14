@@ -119,14 +119,22 @@ class SecurityAgent(BaseAgent):
             self.logger.error(f"Rate limit kontrolü hatası: {e}")
             return {"is_suspicious": False, "action": "allow"}
 
-    # ─── Yardımcı metodlar ───────────────────────────────────────────
+    # ── Yasaklı kelime listesi (LLM çağırmadan hızlı filtre) ───────────
+    BANNED_WORDS = {
+        "küfür1", "küfür2", "hack", "exploit", "injection",
+        "drop table", "delete from", "<script>", "javascript:",
+        "prompt injection", "ignore previous", "ignore above",
+    }
+
     async def _check_banned_words(self, content: str) -> dict:
-        try:
-            prompt = BANNED_WORDS_CHECK_PROMPT.format(content=content)
-            return await self.call_llm_json(prompt)
-        except Exception as e:
-            self.logger.error(f"Kelime kontrolü hatası: {e}")
-            return {"has_banned_words": False, "found_words": [], "censored_content": content}
+        lower = content.lower()
+        found = [w for w in self.BANNED_WORDS if w in lower]
+        if found:
+            censored = content
+            for w in found:
+                censored = censored.replace(w, "*" * len(w))
+            return {"has_banned_words": True, "found_words": found, "censored_content": censored}
+        return {"has_banned_words": False, "found_words": [], "censored_content": content}
 
     async def _moderate_content(self, content: str, user_id: str, content_type: str) -> dict:
         try:
