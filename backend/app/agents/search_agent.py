@@ -78,6 +78,8 @@ class SearchAgent(BaseAgent):
         user_id = input_data.get("user_id", None)
         is_comparison = input_data.get("is_comparison", False)
         comparison_products = input_data.get("comparison_products", [])
+        occasion = input_data.get("occasion", "")
+        recipient = input_data.get("recipient", "")
 
         self.logger.info(f"Arama başladı: {query} | comparison={is_comparison}")
 
@@ -92,6 +94,12 @@ class SearchAgent(BaseAgent):
                 budget = parsed.get("max_price")
             self.logger.info(f"Parsed query: {parsed}")
             llm_parse_ok = True
+
+            # Hediye bağlamı varsa occasion/recipient güncelle
+            if not occasion and parsed.get("occasion"):
+                occasion = parsed["occasion"]
+            if not recipient and parsed.get("recipient"):
+                recipient = parsed["recipient"]
         except Exception as e:
             self.logger.error(f"Sorgu parse hatası (LLM fallback aktif): {e}")
 
