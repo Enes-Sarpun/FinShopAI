@@ -281,7 +281,13 @@ export default function ChatPage() {
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
             </div>
-            <p className="text-xs text-gray-400 text-center mt-2">Shift+Enter ile satır ekle · Enter ile gönder</p>
+            <div className="flex flex-col items-center gap-1 mt-2">
+              <p className="text-xs text-gray-400">Shift+Enter ile satır ekle · Enter ile gönder</p>
+              <p className="text-xs text-gray-400/70">
+                FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
+              </p>
+            </div>
+
           </div>
         </div>
       </div>

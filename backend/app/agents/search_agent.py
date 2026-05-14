@@ -251,10 +251,6 @@ class SearchAgent(BaseAgent):
                 product_name=product.get("name", ""),
                 price=product.get("price", ""),
                 source=product.get("seller", ""),
-            )
-            return await self.call_llm(prompt)
-        except Exception as e:
-            self.logger.error(f"LLM öneri nedeni hatası: {e}")
                 occasion=occasion or "belirtilmedi",
                 recipient=recipient or "belirtilmedi",
             )
@@ -268,7 +264,6 @@ class SearchAgent(BaseAgent):
             recipient_text = f"{recipient}'a " if recipient else ""
             return (
                 f"{name}, {seller} üzerinde {price:,.0f} TL fiyatıyla sunulmaktadır. "
-                f"Bütçenize uygun bu ürün kaliteli bir seçenek olarak öne çıkmaktadır."
                 f"{occasion_text}{recipient_text}bütçenize uygun kaliteli bir seçenek olarak öne çıkmaktadır."
             )
 
