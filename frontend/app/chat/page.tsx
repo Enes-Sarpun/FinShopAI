@@ -65,23 +65,28 @@ export default function ChatPage() {
     setHydrated(true);
   }, []);
 
-  useEffect(() => {
-    if (!hydrated || paramHandled.current) return;
-    paramHandled.current = true;
+ 
 
-    const loadId = searchParams.get("load");
-    const q = searchParams.get("q");
+  const loadId = searchParams.get("load");
+  const q = searchParams.get("q");
+
+  useEffect(() => {
+    if (!hydrated) return;
+       
 
     if (loadId) {
       activeThreadId.current = loadId;
       const key = storageKey(loadId);
       const cached = loadFromStorage(key);
-      if (cached) { setMessages(cached); return; }
+      if (cached && cached.length > 0) { setMessages(cached); return; }
 
       chatApi.getThread(loadId).then((d: unknown) => {
         const data = d as { thread: { id: string; message: string; role: string; metadata?: Record<string, unknown> }[] };
         const thread = data.thread || [];
-        if (thread.length === 0) return;
+        if (thread.length === 0) {
+          setMessages([{ role: "bot", text: "Bu sohbet bulunamadı veya yüklenemedi." }]);
+          return;
+        }
 
         const restored: Msg[] = [];
         for (const msg of thread) {
@@ -105,24 +110,29 @@ export default function ChatPage() {
               if (payload?.products?.length)
                 restored.push({ role: "products", products: payload.products, topPick: payload.top_pick ?? null, advice: payload.financial_advice ?? undefined });
             } else {
-              restored.push({ role: "bot", text: msg.message });
+              if (msg.message) restored.push({ role: "bot", text: msg.message });
             }
           }
         }
         if (restored.length > 0) {
           setMessages(restored);
           saveToStorage(key, restored);
+        } else {
+          setMessages([{ role: "bot", text: "Sohbet yüklendi fakat gösterilecek mesaj bulunamadı." }]);
         }
-      }).catch(() => {});
+      }).catch(() => {
+        setMessages([{ role: "bot", text: "⚠️ Sohbet yüklenirken bir hata oluştu." }]);
+      });
       return;
     }
+
 
     activeThreadId.current = null;
     const cached = loadFromStorage(storageKey(null));
     if (cached) setMessages(cached);
     if (q) send(q);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, loadId, q]);
 
   useEffect(() => {
     if (!hydrated || !paramHandled.current) return;

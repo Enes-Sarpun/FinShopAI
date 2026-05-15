@@ -148,13 +148,6 @@ export default function DashboardPage() {
                     </motion.div>
                   )}
                   <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3, duration: 0.4 }}
-                  >
-                    <WishlistWidget />
-                  </motion.div>
                 </div>
 
                 {/* Orta + sağ kolon: chat + hızlı erişim */}

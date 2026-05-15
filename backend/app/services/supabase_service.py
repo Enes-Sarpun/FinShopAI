@@ -142,39 +142,128 @@ class SupabaseService:
         )
         return result.data or []
 
+    async def get_conversation_starters(self, user_id: str, limit: int = 15) -> list:
+        """Her sohbetin ilk user mesajını döner (session bazlı gruplama).
+        Mesajlar arasında 30 dakikadan fazla boşluk varsa yeni sohbet sayılır.
+        """
+        from datetime import datetime, timedelta
+
+        def parse_ts(ts_raw: str) -> datetime | None:
+            try:
+                ts_str = ts_raw.replace("Z", "+00:00").replace(" ", "T")
+                if ts_str.endswith("+00"):
+                    ts_str = ts_str[:-3] + "+00:00"
+                return datetime.fromisoformat(ts_str)
+            except Exception:
+                return None
+
+        # En son 200 user mesajını çek (yeterli veri için)
+        result = (
+            self.client.table("chat_history")
+            .select("id, message, created_at, role, metadata")
+            .eq("user_id", user_id)
+            .eq("role", "user")
+            .order("created_at", desc=False)  # eskiden yeniye sırala
+            .limit(200)
+            .execute()
+        )
+        messages = result.data or []
+        if not messages:
+            return []
+
+        # Zaman bazlı oturum gruplama (30 dakika eşiği)
+        session_gap = timedelta(minutes=30)
+        sessions: list[dict] = []  # her session'ın ilk mesajı
+        last_time: datetime | None = None
+
+        for msg in messages:
+            ts = parse_ts(msg["created_at"])
+            if ts is None:
+                continue  # parse edilemeyen mesajı atla
+
+            if last_time is None or (ts - last_time) > session_gap:
+                # Yeni oturum başladı, bu mesajı kaydet
+                sessions.append(msg)
+
+            last_time = ts
+
+        # En yeni oturumlar üstte olsun, limit uygula
+        sessions.reverse()
+        return sessions[:limit]
+
     async def delete_chat_history(self, user_id: str) -> None:
         self.client.table("chat_history").delete().eq("user_id", user_id).execute()
 
+    async def update_chat_title(self, chat_id: str, user_id: str, title: str) -> None:
+        """Sohbet başlığını metadata içinde günceller."""
+        result = self.client.table("chat_history").select("metadata").eq("id", chat_id).eq("user_id", user_id).single().execute()
+        if not result.data:
+            return
+        
+        metadata = result.data.get("metadata") or {}
+        metadata["title"] = title
+        
+        self.client.table("chat_history").update({"metadata": metadata}).eq("id", chat_id).eq("user_id", user_id).execute()
+
     async def get_chat_thread(self, user_id: str, user_msg_id: str) -> list:
-        """Bir kullanıcı mesajı ve ona ait asistan cevabını döner."""
-        # Önce kullanıcı mesajını çek
-        user_msg = (
+        """Eski endpoint - geriye dönük uyumluluk için bırakıldı."""
+        return await self.get_session_messages(user_id, user_msg_id)
+
+    async def get_session_messages(self, user_id: str, first_msg_id: str) -> list:
+        """Bir session'daki TÜM mesajları döner.
+        first_msg_id: o session'ın ilk kullanıcı mesajının ID'si.
+        O mesajın zamanından başlayarak 30 dakika içindeki tüm mesajları getirir.
+        Timestamp karşılaştırması Supabase'de değil Python'da yapılır (format uyumsuzluğunu önler).
+        """
+        from datetime import datetime, timedelta
+
+        # Önce tüm kullanıcı mesajlarını kronolojik olarak çek
+        all_msgs = (
             self.client.table("chat_history")
             .select("*")
-            .eq("id", user_msg_id)
             .eq("user_id", user_id)
-            .limit(1)
+            .order("created_at", desc=False)
+            .limit(500)
             .execute()
         )
-        if not user_msg.data:
+        messages = all_msgs.data or []
+        if not messages:
             return []
 
-        # Asistan cevabını metadata.user_msg_id ile bul
-        # Supabase JSON filter: metadata->user_msg_id = user_msg_id
-        assistant_msg = (
-            self.client.table("chat_history")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("role", "assistant")
-            .filter("metadata->>user_msg_id", "eq", user_msg_id)
-            .limit(1)
-            .execute()
-        )
+        # Hedef mesajı bul ve başlangıç zamanını al
+        start_ts: datetime | None = None
+        for msg in messages:
+            if msg["id"] == first_msg_id:
+                try:
+                    ts_str = msg["created_at"].replace("Z", "+00:00").replace(" ", "T")
+                    # +00 → +00:00 normalize et (bazı Supabase sürümleri kısa format döner)
+                    if ts_str.endswith("+00"):
+                        ts_str = ts_str[:-3] + "+00:00"
+                    start_ts = datetime.fromisoformat(ts_str)
+                except Exception:
+                    pass
+                break
 
-        result = list(user_msg.data)
-        if assistant_msg.data:
-            result.extend(assistant_msg.data)
-        return result
+        if start_ts is None:
+            return []
+
+        end_ts = start_ts + timedelta(minutes=30)
+
+        # Python'da filtrele: [start_ts, end_ts] aralığındaki mesajlar
+        session_msgs = []
+        for msg in messages:
+            try:
+                ts_str = msg["created_at"].replace("Z", "+00:00").replace(" ", "T")
+                if ts_str.endswith("+00"):
+                    ts_str = ts_str[:-3] + "+00:00"
+                ts = datetime.fromisoformat(ts_str)
+            except Exception:
+                continue
+            if start_ts <= ts <= end_ts:
+                session_msgs.append(msg)
+
+        return session_msgs
+
 
     async def get_personality_history(self, user_id: str) -> list:
         result = (

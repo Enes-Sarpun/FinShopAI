@@ -120,9 +120,18 @@ export const chatApi = {
 
   getHistory: (limit = 20) => apiFetch(`/api/chat/history?limit=${limit}`),
 
+  // Sidebar için: her oturumun ilk mesajını döndürür
+  getConversations: (limit = 15) => apiFetch(`/api/chat/conversations?limit=${limit}`),
+
   getThread: (userMsgId: string) => apiFetch(`/api/chat/thread/${userMsgId}`),
 
   deleteHistory: () => apiFetch("/api/chat/history", { method: "DELETE" }),
+
+  updateTitle: (id: string, title: string) =>
+    apiFetch(`/api/chat/${id}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
 };
 
 // ── Watchlist ─────────────────────────────────────
