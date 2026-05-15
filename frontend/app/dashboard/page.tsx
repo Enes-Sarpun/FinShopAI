@@ -11,7 +11,6 @@ import SavingsTips from "./components/SavingsTips";
 import QuickActions from "./components/QuickActions";
 import DailyTip from "./components/DailyTip";
 import ChatPreview from "./components/ChatPreview";
-import WishlistWidget from "./components/WishlistWidget";
 
 interface UserInfo { full_name?: string; email?: string; }
 
@@ -117,13 +116,6 @@ export default function DashboardPage() {
                 {/* Sol kolon: profil + tasarruf ipuçları + yıldızlı ürünler */}
                 <div className="lg:col-span-1 space-y-4">
                   <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3, duration: 0.4 }}
-                  >
-                    <WishlistWidget />
-                  </motion.div>
                 </div>
 
                 {/* Orta + sağ kolon: chat + hızlı erişim */}
