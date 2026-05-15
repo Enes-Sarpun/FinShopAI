@@ -212,6 +212,27 @@ async def get_chat_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/conversations")
+async def get_conversations(
+    current_user: dict = Depends(get_current_user),
+    limit: int = Query(default=15, ge=1, le=50)
+):
+    """Sidebar için: Her oturumun ilk kullanıcı mesajını döner.
+    30 dakikadan fazla ara olan mesajlar farklı sohbet sayılır.
+    """
+    user_id = current_user["sub"]
+    try:
+        db = SupabaseService()
+        conversations = await db.get_conversation_starters(user_id, limit=limit)
+        return {
+            "user_id": user_id,
+            "count": len(conversations),
+            "history": conversations
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/history")
 async def delete_chat_history(current_user: dict = Depends(get_current_user)):
     """Kullanıcının tüm sohbet geçmişini siler."""
@@ -219,6 +240,25 @@ async def delete_chat_history(current_user: dict = Depends(get_current_user)):
     try:
         db = SupabaseService()
         await db.delete_chat_history(user_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdateTitleRequest(BaseModel):
+    title: str
+
+@router.patch("/{chat_id}/title")
+async def update_chat_title(
+    chat_id: str,
+    body: UpdateTitleRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Belirli bir sohbetin adını günceller."""
+    user_id = current_user["sub"]
+    try:
+        db = SupabaseService()
+        await db.update_chat_title(chat_id, user_id, body.title)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

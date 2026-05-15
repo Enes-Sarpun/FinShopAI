@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ShoppingBag, LayoutDashboard, MessageSquarePlus,
   Settings, LogOut, ChevronDown,
   Wallet, Brain, PanelLeftClose, PanelLeftOpen, Menu, X,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, Pencil, Check, Star,
 } from "lucide-react";
 import { authApi, chatApi } from "@/lib/api";
 import { useTheme } from "@/lib/ThemeContext";
@@ -21,6 +21,7 @@ interface SidebarProps {
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/chat", icon: MessageSquarePlus, label: "Yeni Sohbet" },
+  { href: "/watchlist", icon: Star, label: "Yıldızlı Ürünler" },
 ];
 
 const BOTTOM_ITEMS = [
@@ -57,8 +58,84 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function ChatItem({ item, onClose }: { item: ChatHistory; onClose?: () => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState((item.metadata?.title as string) || item.message);
+  const [isSaving, setIsSaving] = useState(false);
+  const searchParams = useSearchParams();
+  const isActive = searchParams?.get("load") === item.id;
+
+  async function handleSave() {
+    if (!title.trim() || title === ((item.metadata?.title as string) || item.message)) {
+      setIsEditing(false);
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await chatApi.updateTitle(item.id, title);
+      item.metadata = { ...item.metadata, title };
+    } catch {
+      // ignore
+    } finally {
+      setIsSaving(false);
+      setIsEditing(false);
+    }
+  }
+
+  const displayTitle = (item.metadata?.title as string) || item.message;
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800">
+        <input
+          autoFocus
+          className="flex-1 min-w-0 bg-transparent text-xs outline-none text-gray-900 dark:text-gray-100"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+            if (e.key === "Escape") {
+              setTitle(displayTitle);
+              setIsEditing(false);
+            }
+          }}
+          disabled={isSaving}
+        />
+        <button onClick={handleSave} disabled={isSaving} className="p-1 flex-shrink-0 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded">
+          <Check className="w-3 h-3" />
+        </button>
+        <button onClick={() => { setTitle(displayTitle); setIsEditing(false); }} disabled={isSaving} className="p-1 flex-shrink-0 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`group flex items-center justify-between px-2.5 py-0.5 rounded-lg transition-colors ${isActive ? "bg-blue-50/50 dark:bg-blue-900/20" : "hover:bg-gray-100 dark:hover:bg-gray-800"}`}>
+      <Link
+        href={`/chat?load=${item.id}`}
+        onClick={onClose}
+        className={`flex-1 min-w-0 py-1.5 text-xs truncate ${isActive ? "text-blue-700 dark:text-blue-300 font-medium" : "text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100"}`}
+        title={displayTitle}
+      >
+        {displayTitle.length > 32 ? displayTitle.slice(0, 32) + "…" : displayTitle}
+      </Link>
+      <button
+        onClick={() => setIsEditing(true)}
+        className="opacity-0 group-hover:opacity-100 p-1 flex-shrink-0 text-gray-400 hover:text-blue-500 transition-opacity"
+        title="Yeniden adlandır"
+      >
+        <Pencil className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
 function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onClose }: ContentProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const loadId = searchParams?.get("load");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -110,7 +187,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
             title={collapsed ? label : undefined}
             onClick={onClose}
             className={`flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition-all duration-150 ${
-              pathname === href
+              (pathname === href && (href !== "/chat" || !loadId))
                 ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"
                 : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
             }`}
@@ -132,15 +209,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
               <p className="text-xs text-gray-400 dark:text-gray-500 px-2.5 py-2">Henüz sohbet yok</p>
             ) : (
               history.map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/chat?load=${item.id}`}
-                  onClick={onClose}
-                  className="block px-2.5 py-2 rounded-lg text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors truncate"
-                  title={item.message}
-                >
-                  {item.message.length > 32 ? item.message.slice(0, 32) + "…" : item.message}
-                </Link>
+                <ChatItem key={item.id} item={item} onClose={onClose} />
               ))
             )}
           </div>
@@ -222,18 +291,10 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
   const [history, setHistory] = useState<ChatHistory[]>([]);
 
   useEffect(() => {
-    chatApi.getHistory(20)
+    chatApi.getConversations(15)
       .then((d: unknown) => {
         const data = d as { history: ChatHistory[] };
-        const seen = new Set<string>();
-        const filtered = (data.history || []).filter((h) => {
-          if (h.role !== "user") return false;
-          const key = h.message.trim().toLowerCase().slice(0, 60);
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setHistory(filtered.slice(0, 12));
+        setHistory(data.history || []);
       })
       .catch(() => {});
   }, []);
