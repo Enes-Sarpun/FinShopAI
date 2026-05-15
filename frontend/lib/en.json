@@ -15,6 +15,7 @@
   "navigation": {
     "dashboard": "Dashboard",
     "newChat": "New Chat",
+    "watchlist": "Starred Items",
     "history": "History",
     "noChats": "No chats yet",
     "budgetSettings": "Budget Settings",

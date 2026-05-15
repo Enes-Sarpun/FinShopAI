@@ -19,18 +19,6 @@ interface SidebarProps {
   userEmail?: string;
 }
 
-const NAV_ITEMS = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/chat", icon: MessageSquarePlus, label: "Yeni Sohbet" },
-  { href: "/watchlist", icon: Star, label: "Yıldızlı Ürünler" },
-];
-
-const BOTTOM_ITEMS = [
-  { href: "/onboarding/budget", icon: Wallet, label: "Bütçe Ayarları" },
-  { href: "/onboarding/personality", icon: Brain, label: "Kişilik Testi" },
-  { href: "/settings", icon: Settings, label: "Ayarlar" },
-];
-
 interface ContentProps {
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
@@ -135,6 +123,7 @@ function ChatItem({ item, onClose }: { item: ChatHistory; onClose?: () => void }
 }
 
 function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onClose }: ContentProps) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const loadId = searchParams?.get("load");
@@ -144,6 +133,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
   const navItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: t("navigation.dashboard") },
     { href: "/chat", icon: MessageSquarePlus, label: t("navigation.newChat") },
+    { href: "/watchlist", icon: Star, label: t("navigation.watchlist") },
   ];
 
   const bottomItems = [
