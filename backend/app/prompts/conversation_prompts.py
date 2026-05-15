@@ -25,23 +25,42 @@ Intent türleri:
 
 SADECE JSON döndür, başka bir şey yazma."""
 
-INTENT_CLASSIFICATION_PROMPT = """Önceki sohbet bağlamı:
+INTENT_CLASSIFICATION_PROMPT = """Önceki sohbet bağlamı (eski → yeni):
 {history_text}
 
 Kullanıcının son mesajı: "{message}"
 
-Mesajın niyetini belirle ve aşağıdaki JSON formatında yanıt ver:
+ÇOK ÖNEMLİ BAĞLAM KURALLARI:
+1. Eğer önceki asistan mesajlarında "[Önerilen ürünler: ...]" varsa, bu bir ÜRÜN ARAMA bağlamıdır.
+   Kullanıcının son mesajı kısa bir düzeltme/ek bilgi gibi görünüyorsa (örn: "ben erkeğim",
+   "ben kadınım", "daha ucuz", "başka", "siyah olsun", "42 numara", "beğenmedim") bunu
+   PRODUCT_SEARCH olarak işaretle ve extracted_query'i önceki arama sorgusu + yeni bilgiyi
+   birleştirerek üret.
+   Örnek: önceki "kadın pantolon" + son mesaj "ben erkeğim" → extracted_query: "erkek pantolon"
+2. "teşekkür ederim", "sağ ol" gibi mesajlarda intent CHITCHAT olur. ASLA jenerik "nasıl
+   yardımcı olabilirim?" deme — eğer önceki bağlamda ürün önerildiyse, ürünler hakkında
+   bağlamlı yanıt ver: "Rica ederim! Beğendiğin oldu mu? Detayını sorabilirsin."
+3. Geçmişte ürün önerildiyse ve kullanıcı yeni bir ürün adı söylemiyorsa, intent büyük
+   ihtimalle PRODUCT_SEARCH'tür (refinement). CHITCHAT'e koşma.
+
+JSON formatında yanıt ver (BAŞKA HİÇBİR ŞEY YAZMA):
 {{
   "intent": "PRODUCT_SEARCH|COMPARISON|BUDGET_QUERY|COMPLAINT|GREETING|CHITCHAT",
-  "confidence": 0.0-1.0 arası float (ne kadar emin olduğun),
-  "reply": "eğer intent CHITCHAT/GREETING/COMPLAINT/BUDGET_QUERY ise kısa samimi yanıt; PRODUCT_SEARCH/COMPARISON ise null",
-  "comparison_products": ["ürün1", "ürün2"] veya [] (sadece COMPARISON intent için),
+  "confidence": 0.0-1.0 arası float,
+  "reply": "CHITCHAT/GREETING/COMPLAINT/BUDGET_QUERY ise kısa samimi yanıt (bağlamı dikkate al!); PRODUCT_SEARCH/COMPARISON ise null",
+  "comparison_products": ["ürün1", "ürün2"] veya [],
   "extracted_query": "PRODUCT_SEARCH/COMPARISON ise temizlenmiş arama sorgusu, diğerleri için null"
 }}
 
 Örnekler:
 - "merhaba" → intent: GREETING, confidence: 0.99
-- "teşekkürler" → intent: CHITCHAT, confidence: 0.98
+- "teşekkürler" (ürün bağlamı YOK) → intent: CHITCHAT, reply: "Rica ederim! 😊", confidence: 0.98
+- "teşekkürler" (önceki: [Önerilen ürünler: X, Y, Z]) → intent: CHITCHAT,
+  reply: "Rica ederim! Beğendiğin oldu mu? Detayını sormak istediğin bir ürün varsa söyle.", confidence: 0.95
+- "ben erkeğim" (önceki: kadın pantolon önerilmiş) → intent: PRODUCT_SEARCH,
+  extracted_query: "erkek pantolon", reply: null, confidence: 0.9
+- "daha ucuz olsun" (önceki: laptop önerilmiş) → intent: PRODUCT_SEARCH,
+  extracted_query: "ucuz laptop", reply: null, confidence: 0.9
 - "iPhone 15 mi Galaxy S24 mü alsam" → intent: COMPARISON, confidence: 0.95
 - "bütçem yeterli mi?" → intent: BUDGET_QUERY, confidence: 0.9
 - "laptop arıyorum 10000 TL" → intent: PRODUCT_SEARCH, confidence: 0.97
@@ -57,9 +76,9 @@ QUICK_REPLIES = {
         "Merhaba! Bütçene uygun harika ürünler bulmaya hazırım.",
     ],
     "tesekkur": [
-        "Ne demek, kolay gelsin!",
-        "Rica ederim! 😊",
-        "Bir şey değil, görüşürüz!",
+        "Ne demek, kolay gelsin! 😊",
+        "Rica ederim! İhtiyacın olursa yine buradayım.",
+        "Bir şey değil! Aradığın başka bir şey olursa söyle yeter.",
     ],
     "evet": [
         "Harika! Devam edelim 😊",

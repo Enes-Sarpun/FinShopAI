@@ -66,7 +66,21 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
 
         # ── SOHBET MODU ──────────────────────────────────────────
         if not conv_result["is_product_request"]:
-            reply = conv_result.get("reply") or "Başka bir konuda yardımcı olabilir miyim?"
+            # Fallback bağlam-duyarlı: önceki mesajlarda ürün önerildiyse jenerik
+            # "Nasıl yardımcı olabilirim?" yerine ürünlerle ilgili açık soru sor.
+            fallback_reply = "Başka bir konuda yardımcı olabilir miyim?"
+            if any(
+                (h.get("role") == "assistant"
+                 and isinstance(h.get("metadata"), dict)
+                 and h.get("metadata", {}).get("type") == "products")
+                for h in (history or [])[:4]
+            ):
+                fallback_reply = (
+                    "Önerdiğim ürünler hakkında ne düşünüyorsun? "
+                    "Beğenmediğin bir şey varsa kriterleri (fiyat, renk, marka...) "
+                    "söyle, yeniden bakayım."
+                )
+            reply = conv_result.get("reply") or fallback_reply
 
             await db.save_chat({
                 "user_id": user_id,
