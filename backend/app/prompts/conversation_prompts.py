@@ -50,26 +50,29 @@ Mesajın niyetini belirle ve aşağıdaki JSON formatında yanıt ver:
 # ── Hızlı Yanıtlar (LLM çağırmadan) ────────────────────────────────────────
 QUICK_REPLIES = {
     "selamlama": [
-        "Merhaba! Size nasıl yardımcı olabilirim? 😊",
         "Selam! Bugün ne arıyoruz? 🛍️",
-        "Merhaba! Bütçenize uygun ürünler bulmak için hazırım! ✨",
+        "Hey! Hoş geldin, anlat bakalım.",
+        "Selam! Sana nasıl yardımcı olabilirim?",
+        "Selam dostum! Hayırlı bir şey mi var?",
+        "Merhaba! Bütçene uygun harika ürünler bulmaya hazırım.",
     ],
     "tesekkur": [
-        "Rica ederim! Başka bir konuda yardımcı olabilir miyim? 😊",
-        "Ne demek! Başarılı alışverişler dilerim 🎉",
-        "Her zaman! Sorunuz olursa buradayım 👋",
+        "Ne demek, kolay gelsin!",
+        "Rica ederim! 😊",
+        "Bir şey değil, görüşürüz!",
     ],
     "evet": [
         "Harika! Devam edelim 😊",
         "Anladım, ilerleyelim!",
+        "Süper, hemen bakıyorum.",
     ],
     "hayir": [
-        "Tamam, farklı bir arama deneyelim mi?",
+        "Tamam, farklı bir şeye bakalım mı?",
         "Anladım! Başka nasıl yardımcı olabilirim?",
     ],
     "guzel": [
-        "Harika! 😊 Başka bir şey ister misiniz?",
-        "Sevindim! Yardımcı olabildiğime memnunum 🎉",
+        "Ne güzel! 😊 Başka bir şey ister misin?",
+        "Sevindim! Sorun olursa buradayım.",
     ],
 }
 
@@ -79,7 +82,17 @@ BUDGET_QUERY_PROMPT = """Kullanıcının bütçe durumu:
 
 Kullanıcı soruyor: "{message}"
 
-Bütçe bilgisine göre kısa, anlaşılır ve Türkçe yanıt ver.
+Sıcak, samimi bir arkadaş gibi yanıt ver. 2-3 cümle yeterli.
+
+KURALLLAR:
+- "spendable_after_savings", "spending_type", "risk_score" gibi teknik terimler KULLANMA
+- Sayıları doğal dilde ver: "10.000 TL harcanabilir alanın var" gibi
+- "Sağlıklı", "Zorlanıyor", "Kritik" yerine doğal ifadeler kullan
+- Sonunda açık uçlu bir soru sor (opsiyonel)
+
+ÖRNEK YANIT TARZI:
+"Şu an iyi durumdasın! Bu ay yaklaşık 10.000 TL'lik bir alanın var ve gider oranın da düşük — bütçen sağlıklı. Bir şey almak mı düşünüyorsun?"
+
 SADECE düz metin döndür, JSON değil."""
 
 # ── Şikayet Yanıt ────────────────────────────────────────────────────────

@@ -93,7 +93,15 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             }
 
         # ── ÜRÜN / INTENT MODU ────────────────────────────────────
-        result = await run_orchestrator(user_id=user_id, message=body.message)
+        # ConversationAgent'ın LLM ile tespit ettiği bilgileri Orchestrator'a aktar
+        result = await run_orchestrator(
+            user_id=user_id,
+            message=body.message,
+            conv_intent=conv_result.get("intent"),
+            extracted_query=conv_result.get("extracted_query"),
+            is_comparison=conv_result.get("is_comparison", False),
+            comparison_products=conv_result.get("comparison_products", []),
+        )
 
         intent      = result.get("intent", "product_search")
         budget_data = result.get("budget_status")

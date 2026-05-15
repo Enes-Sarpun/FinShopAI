@@ -17,59 +17,64 @@ from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 
 RECOMMENDATION_PROMPT = """
-Sen bir kişisel finans ve alışveriş danışmanısın.
-Kullanıcının finansal profili ve bulunan ürünlere göre en iyi öneriyi yap.
-
-Kullanıcı Profili:
-- Harcama tipi: {spending_type}
-- Risk skoru: {risk_score}/10 (yüksek = riskli harcayıcı)
-- Impulsif harcama: {impulsive_score}/10 (yüksek = dürtüsel)
-- Tasarruf skoru: {saving_score}/10 (yüksek = çok tasarruf ediyor)
-- Araştırma skoru: {research_score}/10 (yüksek = çok araştırıyor)
-- Bütçe durumu: {budget_status}
-- Harcanabilir bütçe: {spendable} TL
+Sen kullanıcının kişisel alışveriş arkadaşısın. Samimi, sıcak, kısa konuş.
 
 Kullanıcı İsteği: "{message}"{gift_context_text}
 
 Önerilen Ürünler:
 {products_text}
 
-Kullanıcı profiline göre kişiselleştirilmiş bir öneri yap.
-- Impulsif skoru yüksekse: "fiyat/performans araştırın" vurgusu yap
-- Tasarruf skoru yüksekse: ekonomik seçeneği öne çıkar
-- Risk skoru yüksekse: dikkatli ol uyarısı ver
-- Bütçe etiketleri: affordable (bütçe içinde), tight (sınırda), over_budget (bütçe dışı)
+Gizli bağlam (kullanıcıya GÖSTERME, sadece karar almak için kullan):
+- Harcama eğilimi: {spending_type}
+- Tasarruf odaklı mı: {saving_score}/10
+- Dürtüsel mi: {impulsive_score}/10
+- Bütçe durumu: {budget_status}
+- Harcanabilir: {spendable} TL
+
+KULLANICIYA SUNULAN METİNDE ASLA YAZILMAYACAKLAR:
+✗ "Profilinize göre ayarlandı", "Savruk/Tasarrufçu/Dengeli profil"
+✗ "Affordability skoru", "Value score", "Sentiment skoru"
+✗ "Sistem analiz etti", "Pipeline çalıştı", "Bütçe hesaplandı"
+✗ "spending_type", "impulsive_score" gibi teknik terimler
+✗ İngilizce teknik kelimeler
+
+YALNIZCA ŞU TARZDA YAZ:
+✓ "Bütçene tam uyuyor" / "Biraz zorlar ama değer"
+✓ "Yorumları çok güzel" / "Kullananlar memnun"
+✓ "Fiyat-performansı şahane"
+✓ Samimi, arkadaşça Türkçe
 
 Aşağıdaki JSON formatında yanıt ver:
 {{
     "top_pick": {{
-        "product_name": "en iyi seçenek ürün adı",
-        "reason": "neden bu ürünü öneriyorsun (2-3 cümle, kullanıcının finansal profiline göre kişiselleştirilmiş)",
+        "product_name": "en iyi seçenek ürün adı (listeden seç, uydurma)",
+        "reason": "neden bu ürünü öneriyorsun — samimi 1-2 cümle, teknik terim YOK",
         "value_score": 1-10 arası değer puanı,
-        "personality_fit": "bu ürünün kullanıcının profiline neden uyduğu (1 cümle)"
+        "personality_fit": "bu ürün sana uygun çünkü... (1 cümle, samimi)"
     }},
-    "summary": "tüm önerileri özetleyen 1-2 cümle mesaj",
-    "financial_advice": "bu alışverişle ilgili kısa finansal tavsiye (spending_type'a göre kişiselleştirilmiş)",
+    "summary": "1-2 cümle, arkadaşça özet",
+    "financial_advice": "bütçeye göre samimi 1 cümle tavsiye (teknik terim YOK)",
     "ranking": ["1. sıra ürün adı", "2. sıra ürün adı", "3. sıra ürün adı"],
-    "budget_warning": true veya false (ürün bütçeyi zorluyor mu)
+    "budget_warning": true veya false
 }}
 
 SADECE JSON DÖNDÜR.
 """
 
 COMPARISON_PROMPT = """
-Sen bir ürün karşılaştırma uzmanısın. Kullanıcı iki veya daha fazla ürünü karşılaştırmak istiyor.
-
-Kullanıcı Profili:
-- Harcama tipi: {spending_type}
-- Bütçe durumu: {budget_status}
-- Harcanabilir bütçe: {spendable} TL
+Sen kullanıcının alışveriş arkadaşısın. İki ürünü karşılaştırıyor.
 
 Kullanıcı Sorusu: "{message}"{gift_context_text}
 Karşılaştırılacak Ürünler: {comparison_products}
 
+Gizli bağlam (kullanıcıya GÖSTERME):
+- Harcama eğilimi: {spending_type}
+- Bütçe: {budget_status} / {spendable} TL
+
 Bulunan Ürünler:
 {products_text}
+
+KURAL: Samimi, kısa konuş. Teknik terim (skor, profil, pipeline) YAZMA.
 
 Kapsamlı bir karşılaştırma yap:
 
@@ -93,6 +98,136 @@ Kapsamlı bir karşılaştırma yap:
 
 SADECE JSON DÖNDÜR.
 """
+
+
+import random as _random
+
+
+def _compute_personality_weights(personality: dict) -> dict:
+    weights = {"budget_fit": 0.30, "rating": 0.20, "reviews": 0.20, "value": 0.15, "detail": 0.15}
+    saving      = personality.get("saving_score", 5)
+    research    = personality.get("research_score", 5)
+    impulsive   = personality.get("impulsive_score", 5)
+
+    if saving >= 7:
+        weights = {"budget_fit": 0.45, "value": 0.25, "rating": 0.15, "reviews": 0.10, "detail": 0.05}
+    elif research >= 7:
+        weights = {"reviews": 0.30, "detail": 0.25, "rating": 0.20, "budget_fit": 0.15, "value": 0.10}
+    elif impulsive >= 7:
+        weights = {"rating": 0.35, "budget_fit": 0.25, "value": 0.20, "reviews": 0.15, "detail": 0.05}
+    return weights
+
+
+def _compute_personalized_score(product: dict, weights: dict) -> tuple[float, list]:
+    factors = []
+
+    affordability = product.get("affordability_tag", "tight")
+    if affordability == "affordable":
+        budget_score = 10.0
+        factors.append({"name": "bütçe_uyumu", "label": "bütçene tam uyuyor", "w": weights["budget_fit"]})
+    elif affordability == "tight":
+        budget_score = 5.0
+        factors.append({"name": "bütçe_uyumu", "label": "bütçenin sınırında", "w": weights["budget_fit"] * 0.5})
+    else:
+        budget_score = 0.0
+
+    rating = float(product.get("rating") or 0)
+    rating_score = (rating / 5.0) * 10.0
+    if rating >= 4.5:
+        factors.append({"name": "yüksek_puan", "label": f"puanı {rating}/5", "w": weights["rating"]})
+
+    sentiment = float((product.get("review_analysis") or {}).get("analysis", {}).get("sentiment_score") or 5)
+    if sentiment >= 7:
+        factors.append({"name": "iyi_yorumlar", "label": "yorumları çok güzel", "w": weights["reviews"]})
+
+    value_score = float(product.get("value_score") or 5)
+    if value_score >= 7:
+        factors.append({"name": "fiyat_performans", "label": "fiyat-performansı şahane", "w": weights["value"]})
+
+    pros = len((product.get("review_analysis") or {}).get("analysis", {}).get("pros") or [])
+    detail_score = min(10.0, pros * 2.5)
+    if pros >= 3:
+        factors.append({"name": "detaylı", "label": "özellikleri zengin", "w": weights["detail"]})
+
+    total = (
+        budget_score * weights["budget_fit"] +
+        rating_score * weights["rating"] +
+        sentiment   * weights["reviews"] +
+        value_score * weights["value"] +
+        detail_score * weights["detail"]
+    )
+    return total, factors
+
+
+def select_winner(products: list, personality: dict, user_budget: dict = None) -> dict | None:
+    """
+    Kişilik bazlı winner seçimi. LLM çağrısı yok — template-based, hızlı.
+    Returns: { winner_index, reasoning_for_user, confidence, key_factors }
+    """
+    if not products:
+        return None
+    if len(products) == 1:
+        p = products[0]
+        tag = p.get("affordability_tag", "tight")
+        if tag == "affordable":
+            reason = f"**{p.get('name','')}** tek seçenek ve bütçene tam uyuyor."
+        elif tag == "over_budget":
+            reason = f"**{p.get('name','')}** bulunan tek seçenek ama biraz bütçeni zorlayabilir."
+        else:
+            reason = f"**{p.get('name','')}** sana en uygunu gibi duruyor."
+        return {"winner_index": 0, "winner_product": p, "reasoning_for_user": reason,
+                "confidence": "high", "key_factors": []}
+
+    weights = _compute_personality_weights(personality)
+    scored = []
+    for idx, p in enumerate(products):
+        total, factors = _compute_personalized_score(p, weights)
+        scored.append({"index": idx, "product": p, "score": total, "factors": factors})
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    winner = scored[0]
+    score_gap = scored[0]["score"] - scored[1]["score"] if len(scored) > 1 else 99
+
+    confidence = "high" if score_gap > 1.5 else ("medium" if score_gap > 0.7 else "low")
+
+    # Samimi reasoning oluştur
+    top_factors = sorted(winner["factors"], key=lambda f: f["w"], reverse=True)[:2]
+    name = winner["product"].get("name", "Bu ürün")
+    openings = [
+        f"Sana **{name}**'i öneriyorum",
+        f"Bence en uygunu **{name}**",
+        f"**{name}** tam senin için",
+        f"Eğer benim önerim olursa: **{name}**",
+    ]
+    opening = _random.choice(openings)
+
+    if top_factors:
+        labels = [f["label"] for f in top_factors]
+        reason_part = f"çünkü {labels[0]}" + (f" ve {labels[1]}" if len(labels) > 1 else "")
+    else:
+        reason_part = "çünkü en dengeli seçenek"
+
+    # Kişilik notu
+    personality_note = ""
+    if personality.get("saving_score", 5) >= 7:
+        personality_note = " Dikkatli alışveriş yapıyorsun, bu seçim güvenli."
+    elif personality.get("research_score", 5) >= 7:
+        personality_note = " Detaylı araştırırsın, ürün sayfasını mutlaka incele."
+    elif personality.get("impulsive_score", 5) >= 7:
+        personality_note = " Ama bir gün düşünüp öyle al olur mu? 😄"
+
+    closing_map = {"high": "Gözüm kapalı bunu öneririm.", "medium": "Diğerleri de fena değil ama bu öne çıkıyor.", "low": "Yakın bir yarış oldu ama bu küçük farkla önde."}
+    closing = closing_map[confidence]
+
+    reasoning = f"{opening} — {reason_part}.{personality_note} {closing}"
+
+    return {
+        "winner_index": winner["index"],
+        "winner_product": winner["product"],
+        "reasoning_for_user": reasoning,
+        "confidence": confidence,
+        "key_factors": [f["name"] for f in top_factors],
+    }
 
 
 class RecommendationAgent(BaseAgent):
@@ -175,6 +310,23 @@ class RecommendationAgent(BaseAgent):
             scored_products, llm_result.get("ranking", [])
         )
 
+        # Winner seçimi (LLM çağrısı yok, template-based hızlı)
+        winner_data = select_winner(ranked_products, personality, budget)
+        if winner_data:
+            wi = winner_data["winner_index"]
+            if wi < len(ranked_products):
+                ranked_products[wi]["is_recommended"] = True
+                ranked_products[wi]["recommendation_reason"] = winner_data["reasoning_for_user"]
+
+        # LLM summary yoksa sade fallback (teknik terim içermeyen)
+        summary = llm_result.get("summary", "")
+        if not summary or any(w in summary.lower() for w in ["profil", "spending_type", "affordability", "pipeline"]):
+            summary = "Sana birkaç güzel seçenek buldum, bir göz at!"
+
+        financial_advice = llm_result.get("financial_advice", "")
+        if financial_advice and any(w in financial_advice.lower() for w in ["savruk", "profil", "spending", "affordability"]):
+            financial_advice = ""
+
         return {
             "mode": "recommendation",
             "spending_type": spending_type,
@@ -182,13 +334,11 @@ class RecommendationAgent(BaseAgent):
             "occasion": occasion,
             "recipient": recipient,
             "top_pick": llm_result.get("top_pick"),
-            "summary": llm_result.get(
-                "summary",
-                f"{spending_type.capitalize()} profili için öneriler hazırlandı.",
-            ),
-            "financial_advice": llm_result.get("financial_advice", ""),
+            "summary": summary,
+            "financial_advice": financial_advice,
             "budget_warning": llm_result.get("budget_warning", False),
             "top_products": ranked_products,
+            "winner": winner_data,
         }
 
     # ------------------------------------------------------------------ #

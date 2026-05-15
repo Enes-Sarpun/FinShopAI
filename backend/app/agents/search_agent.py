@@ -22,6 +22,80 @@ from app.prompts.search_prompts import SEARCH_QUERY_PROMPT
 from app.prompts.review_prompts import REVIEW_ANALYSIS_PROMPT
 
 
+def infer_budget_from_context(
+    user_budget: dict = None,
+    recipient: str = None,
+    occasion: str = None,
+    personality: dict = None,
+) -> dict:
+    """
+    Kullanıcı fiyat belirtmediyse akıllı bütçe tahmini yapar.
+    Returns: { "min": float, "max": float, "auto_inferred": True }
+    """
+    CATEGORY_RANGES = {
+        ("anne", None):              (300, 1500),
+        ("anne", "doğum_günü"):      (400, 2000),
+        ("anne", "anneler_günü"):    (350, 1500),
+        ("anne", "yılbaşı"):         (400, 1800),
+        ("baba", None):              (400, 2000),
+        ("baba", "doğum_günü"):      (500, 2500),
+        ("baba", "babalar_günü"):    (400, 1800),
+        ("sevgili", None):           (500, 3000),
+        ("sevgili", "sevgililer_günü"): (600, 2500),
+        ("sevgili", "doğum_günü"):   (800, 3500),
+        ("sevgili", "yılbaşı"):      (700, 3000),
+        ("arkadaş", None):           (200, 800),
+        ("arkadaş", "doğum_günü"):   (300, 1000),
+        ("öğretmen", None):          (150, 600),
+        (None, None):                (200, 1500),
+    }
+
+    r = (recipient or "").lower()
+    o = (occasion or "").lower().replace(" ", "_")
+
+    range_min, range_max = 200, 1500
+    for key in [(r, o), (r, None), (None, None)]:
+        if key in CATEGORY_RANGES:
+            range_min, range_max = CATEGORY_RANGES[key]
+            break
+
+    if user_budget:
+        # user_budget financial_metrics dict'i olabilir (spendable_after_savings içerir)
+        spendable = (
+            user_budget.get("spendable_after_savings")
+            or user_budget.get("spendable")
+            or 0
+        )
+        if spendable > 0:
+            max_safe = spendable * 0.20
+            range_max = min(range_max, max_safe)
+            range_min = min(range_min, range_max * 0.4)
+
+    if personality:
+        if personality.get("saving_score", 5) >= 7:
+            range_max *= 0.7
+            range_min *= 0.8
+        elif personality.get("impulsive_score", 5) >= 7:
+            range_max *= 0.85
+
+    return {"min": round(max(range_min, 50)), "max": round(range_max), "auto_inferred": True}
+
+
+_CATEGORY_QUERIES = {
+    "mücevher":      {"anne": "kadın gümüş kolye", "sevgili": "kadın gümüş bileklik", None: "gümüş takı"},
+    "kişisel_bakım": {"anne": "kadın parfüm seti", "baba": "erkek parfüm", "sevgili": "parfüm hediye seti", None: "parfüm seti"},
+    "premium_yaşam": {None: "premium çikolata hediye kutu"},
+    "ev_dekorasyon": {None: "el yapımı seramik vazo"},
+    "teknoloji":     {None: "bluetooth kulaklık"},
+    "hobi":          {"baba": "erkek kol saati", None: "hediye seti"},
+}
+
+
+def _build_query_from_category(category: str, recipient: str = None) -> str:
+    cat = _CATEGORY_QUERIES.get(category, {})
+    return cat.get(recipient) or cat.get(None) or category.replace("_", " ")
+
+
 def _similarity(a: str, b: str) -> float:
     """İki string arasındaki benzerlik oranı (0-1)."""
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
@@ -107,10 +181,37 @@ class SearchAgent(BaseAgent):
         tags = parsed.get("tags", [])
         recipient = recipient or parsed.get("recipient", "")
         occasion = occasion or parsed.get("occasion", "")
+        gift_intent = parsed.get("gift_intent", False) or parsed.get("gift_context", False)
+        inferred_categories = parsed.get("inferred_categories", [])
+
+        # Kullanıcı fiyat belirtmemişse → otomatik bütçe tahmini
+        budget_was_inferred = False
+        if not budget:
+            user_budget_metrics = input_data.get("user_budget") or {}
+            spendable = user_budget_metrics.get("spendable_after_savings") or 0
+
+            if gift_intent and (recipient or occasion):
+                # Hediye sorgusu: alıcı/occasion bazlı aralık
+                inferred_bgt = infer_budget_from_context(
+                    user_budget=user_budget_metrics,
+                    recipient=recipient,
+                    occasion=occasion,
+                    personality=input_data.get("personality"),
+                )
+                budget = inferred_bgt["max"]
+                budget_was_inferred = True
+                self.logger.info(f"Hediye bütçe tahmini: {inferred_bgt}")
+            elif spendable > 0:
+                # Genel sorgu: bakiyenin %15'i makul üst sınır
+                # (50 TL alt sınır, 20.000 TL üst sınır)
+                auto_max = min(max(spendable * 0.15, 200), 20000)
+                budget = round(auto_max)
+                budget_was_inferred = True
+                self.logger.info(f"Genel bütçe tahmini: {budget} TL (spendable={spendable})")
 
         # Tag'ler varsa ilk tag'i kullan (en spesifik), yoksa ham sorgu
         if tags:
-            search_query = tags[0]  # İlk tag en somut ürün — tek tag daha iyi sonuç verir
+            search_query = tags[0]
         elif not llm_parse_ok:
             words = query.split()
             search_query = " ".join(words[:5]) if len(words) > 5 else query
@@ -142,6 +243,17 @@ class SearchAgent(BaseAgent):
             products = await asyncio.to_thread(
                 self._search_google_shopping_sync, fallback, budget
             )
+
+        # inferred_categories fallback
+        if not products and inferred_categories:
+            for cat in inferred_categories:
+                cat_query = _build_query_from_category(cat, recipient)
+                self.logger.info(f"Category fallback deneniyor: {cat_query}")
+                products = await asyncio.to_thread(
+                    self._search_google_shopping_sync, cat_query, budget
+                )
+                if products:
+                    break
 
         # Son çare: recipient/occasion'a göre kural tabanlı fallback
         if not products and (recipient or occasion):
@@ -185,7 +297,12 @@ class SearchAgent(BaseAgent):
         return {
             "query": query,
             "category": parsed.get("category", ""),
-            "gift_context": parsed.get("gift_context", False),
+            "gift_context": {
+                "recipient": recipient,
+                "occasion": occasion,
+                "gift_intent": gift_intent,
+                "budget_was_inferred": budget_was_inferred,
+            },
             "is_comparison": is_comparison,
             "total_found": len(products),
             "products": products,
@@ -193,13 +310,15 @@ class SearchAgent(BaseAgent):
 
     def _search_google_shopping_sync(self, query: str, budget: float = None) -> list:
         try:
+            if not settings.SERPAPI_KEY:
+                self.logger.error("SERPAPI_KEY boş — .env dosyasını kontrol et!")
+                return []
+
             search_query = query
-            if budget:
-                search_query += f" {int(budget)} TL altı"
 
             params = {
+                "engine": "google_shopping",
                 "q": search_query,
-                "tbm": "shop",
                 "gl": "tr",
                 "hl": "tr",
                 "api_key": settings.SERPAPI_KEY,
@@ -208,13 +327,22 @@ class SearchAgent(BaseAgent):
             search = GoogleSearch(params)
             results = search.get_dict()
 
+            self.logger.info(
+                f"SerpAPI raw: query='{search_query}' "
+                f"shopping_results={len(results.get('shopping_results', []))} "
+                f"error={results.get('error', 'none')}"
+            )
+
             products = []
             for item in results.get("shopping_results", [])[:12]:
                 price_raw = item.get("price", "0")
                 price = self._parse_price(price_raw)
 
-                # Bütçeyi aşıyorsa veya parse edilemeden 0 kaldıysa atla
-                if budget and (price == 0 or price > float(budget)):
+                self.logger.debug(f"  item: {item.get('title','')[:40]} | price_raw={price_raw!r} | parsed={price}")
+
+                # Fiyat parse edilemişse ve budget varsa filtrele
+                # %20 tolerans: tahmini bütçede biraz esneklik ver
+                if budget and price > 0 and price > float(budget) * 1.20:
                     continue
 
                 serpapi_product_id = (
@@ -245,7 +373,7 @@ class SearchAgent(BaseAgent):
             return products
 
         except Exception as e:
-            self.logger.error(f"SerpAPI hatası: {e}")
+            self.logger.error(f"SerpAPI hatası: {type(e).__name__}: {e}", exc_info=True)
             return []
 
     @staticmethod

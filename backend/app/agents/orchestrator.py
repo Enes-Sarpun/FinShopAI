@@ -16,8 +16,44 @@ Intent → Pipeline eşlemesi:
 """
 
 import asyncio
+import re
 import time
 from typing import TypedDict, Optional
+
+
+# ================================================================
+# RESPONSE FILTER — Sistem metni sızıntısı önleme
+# ================================================================
+
+_INTERNAL_PATTERNS = [
+    r"profil[ei]?\s+göre\s+\w+",
+    r"savruk|tasarrufçu|dengeli|harcamacı|dürtüsel\s+profil",
+    r"kullanıcının?\s+(kişilik|profil)\w*\s+",
+    r"bütçe\s+ayarlandı",
+    r"intent\s+tespit",
+    r"agent\s+çalış",
+    r"pipeline\s+",
+    r"node\s+(prepare|search|route)",
+    r"affordability\s+(tagging|score)",
+    r"value_score",
+    r"sentiment_score",
+    r"spending_type",
+    r"spendable_after",
+]
+
+
+def clean_user_text(text: str) -> str:
+    """Kullanıcıya gidecek metinden internal/debug ifadeleri temizler."""
+    if not text:
+        return text
+    lines = text.split("\n")
+    cleaned = []
+    for line in lines:
+        if not any(re.search(p, line, re.IGNORECASE) for p in _INTERNAL_PATTERNS):
+            cleaned.append(line)
+    result = "\n".join(cleaned)
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result.strip()
 
 from langgraph.graph import StateGraph, END
 
@@ -67,18 +103,36 @@ _BUDGET_KW = [
     "bütçe durumu", "mali durum", "bu ay ne", "aylık harcama",
 ]
 
+# ConversationAgent intent → Orchestrator intent mapping
+_CONV_TO_ORCH_INTENT = {
+    "PRODUCT_SEARCH": "product_search",
+    "COMPARISON":     "product_search",  # comparison flag ayrı taşınıyor
+    "BUDGET_QUERY":   "budget_query",
+    "COMPLAINT":      "product_search",  # şikayet sonrası yeniden arama
+}
 
-def _classify_intent(message: str) -> str:
+
+def _classify_intent(message: str, conv_intent: str = None) -> str:
     """
+    ConversationAgent'tan gelen LLM-tabanlı intent varsa onu kullan,
+    yoksa kural tabanlı fallback.
     Döndürür: 'product_search' | 'quick_search' | 'budget_query' | 'watchlist_action'
     """
+    # 1. ConversationAgent'tan gelen intent (LLM tabanlı, güvenilir)
+    if conv_intent and conv_intent in _CONV_TO_ORCH_INTENT:
+        mapped = _CONV_TO_ORCH_INTENT[conv_intent]
+        logger.info(f"[route] ConversationAgent intent kullanılıyor: {conv_intent} → {mapped}")
+        return mapped
+
+    # 2. Kural tabanlı fallback (ConversationAgent intent yoksa)
     lower = message.lower()
     if any(kw in lower for kw in _WATCHLIST_KW):
         return "watchlist_action"
     if any(kw in lower for kw in _BUDGET_KW):
         return "budget_query"
-    has_budget_hint = any(kw in lower for kw in ["tl", "lira", "₺", "bütçe", "fiyat"])
-    return "product_search" if has_budget_hint else "quick_search"
+    # Fallback: artık her zaman product_search — quick_search'ü kaldırıyoruz
+    # çünkü prepare node'u atlamak context kaybına yol açıyordu
+    return "product_search"
 
 
 # ================================================================
@@ -89,6 +143,10 @@ class OrchestratorState(TypedDict):
     user_id: str
     message: str
     intent: Optional[str]             # [v2]
+    conv_intent: Optional[str]        # [v3] ConversationAgent'tan gelen intent
+    extracted_query: Optional[str]    # [v3] ConversationAgent'tan gelen temizlenmiş sorgu
+    is_comparison: bool               # [v3] Karşılaştırma modu
+    comparison_products: list         # [v3] Karşılaştırılacak ürünler
 
     personality: Optional[dict]
     budget: Optional[dict]
@@ -109,9 +167,13 @@ class OrchestratorState(TypedDict):
 
 async def node_route(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
-    intent = _classify_intent(state["message"])
+    # ConversationAgent'tan gelen LLM-tabanlı intent'i kullan, yoksa fallback
+    intent = _classify_intent(state["message"], state.get("conv_intent"))
     elapsed = time.monotonic() - t0
-    logger.info(f"[route] intent={intent} | {state['message'][:50]}")
+    logger.info(
+        f"[route] intent={intent} | conv_intent={state.get('conv_intent')} "
+        f"| {state['message'][:50]}"
+    )
     return {
         **state,
         "intent": intent,
@@ -195,7 +257,9 @@ async def node_budget_only(state: OrchestratorState) -> OrchestratorState:
 
 async def node_search(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
-    logger.info(f"[search] query={state['message']}")
+    # ConversationAgent'tan gelen temizlenmiş sorguyu kullan, yoksa ham mesaj
+    search_query = state.get("extracted_query") or state["message"]
+    logger.info(f"[search] query={search_query} | original={state['message'][:50]}")
     try:
         llm, db = get_services()
         budget_data = state.get("budget") or {}
@@ -210,11 +274,15 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
         ][:3]
 
         result = await SearchAgent(llm=llm, db=db).execute({
-            "query": state["message"],
-            "budget": None,
+            "query": search_query,
+            "budget": None,           # kullanıcının sorgusunda açık fiyat var mı — LLM parse eder
             "user_id": state["user_id"],
             "max_budget": available,
             "previous_queries": previous_queries,
+            "user_budget": budget_data.get("financial_metrics") or {},
+            "personality": state.get("personality") or {},
+            "is_comparison": state.get("is_comparison", False),
+            "comparison_products": state.get("comparison_products", []),
         })
         elapsed = time.monotonic() - t0
         logger.info(f"[search] found={result.get('total_found')} | {elapsed:.3f}s")
@@ -274,11 +342,17 @@ async def node_recommendation(state: OrchestratorState) -> OrchestratorState:
     logger.info("[recommendation] running")
     try:
         llm, db = get_services()
+        search_data = state.get("search") or {}
+        gift_context = search_data.get("gift_context") or {}
         result = await RecommendationAgent(llm=llm, db=db).execute({
             "message": state["message"],
             "personality": state.get("personality"),
             "budget": state.get("budget"),
             "products": state.get("reviews") or [],
+            "is_comparison": state.get("is_comparison", False),
+            "comparison_products": state.get("comparison_products", []),
+            "occasion": gift_context.get("occasion", ""),
+            "recipient": gift_context.get("recipient", ""),
         })
         elapsed = time.monotonic() - t0
         logger.info(f"[recommendation] done | {elapsed:.3f}s")
@@ -343,15 +417,14 @@ def _route_after_route(state: OrchestratorState) -> str:
     """node_route çıkışı — intent'e göre ilk hedef node."""
     return {
         "product_search":   "prepare",
-        "quick_search":     "search",
         "budget_query":     "budget_only",
         "watchlist_action": "watchlist",
     }.get(state.get("intent", "product_search"), "prepare")
 
 
 def _route_after_search(state: OrchestratorState) -> str:
-    """quick_search → recommendation (review atla); diğerleri → review."""
-    return "recommendation" if state.get("intent") == "quick_search" else "review"
+    """Arama sonrası review node'una geç."""
+    return "review"
 
 
 # ================================================================
@@ -371,16 +444,14 @@ def build_graph() -> StateGraph:
 
     g.set_entry_point("route")
 
+    # quick_search kaldırıldı — tüm ürün aramaları prepare → search → review yolundan geçer
     g.add_conditional_edges(
         "route", _route_after_route,
-        {"prepare": "prepare", "search": "search",
+        {"prepare": "prepare",
          "budget_only": "budget_only", "watchlist": "watchlist"},
     )
     g.add_edge("prepare", "search")
-    g.add_conditional_edges(
-        "search", _route_after_search,
-        {"review": "review", "recommendation": "recommendation"},
-    )
+    g.add_edge("search",         "review")
     g.add_edge("review",         "recommendation")
     g.add_edge("recommendation", END)
     g.add_edge("budget_only",    END)
@@ -396,13 +467,27 @@ _graph = build_graph()
 # ANA FONKSİYON
 # ================================================================
 
-async def run_orchestrator(user_id: str, message: str) -> dict:
-    """Chat endpoint'inden çağrılır. Intent'e göre uygun pipeline çalışır."""
+async def run_orchestrator(
+    user_id: str,
+    message: str,
+    conv_intent: str = None,
+    extracted_query: str = None,
+    is_comparison: bool = False,
+    comparison_products: list = None,
+) -> dict:
+    """Chat endpoint'inden çağrılır. ConversationAgent'tan gelen intent bilgisini kullanır."""
     t_total = time.monotonic()
-    logger.info(f"Orchestrator v2 | user={user_id} | msg={message[:60]}")
+    logger.info(
+        f"Orchestrator v3 | user={user_id} | msg={message[:60]} "
+        f"| conv_intent={conv_intent} | extracted_query={extracted_query}"
+    )
 
     initial_state: OrchestratorState = {
         "user_id": user_id, "message": message, "intent": None,
+        "conv_intent": conv_intent,
+        "extracted_query": extracted_query,
+        "is_comparison": is_comparison,
+        "comparison_products": comparison_products or [],
         "personality": None, "budget": None, "search": None,
         "reviews": None, "recommendation": None, "watchlist_result": None,
         "chat_history": None, "error": None,
@@ -418,6 +503,19 @@ async def run_orchestrator(user_id: str, message: str) -> dict:
         f"| timing={final_state['timing']}"
     )
 
+    rec = final_state.get("recommendation") or {}
+    # Kullanıcıya giden metin alanlarını temizle
+    if rec:
+        for field in ("summary", "financial_advice"):
+            if rec.get(field):
+                rec[field] = clean_user_text(rec[field])
+        if rec.get("top_pick") and isinstance(rec["top_pick"], dict):
+            for f in ("reason", "personality_fit"):
+                if rec["top_pick"].get(f):
+                    rec["top_pick"][f] = clean_user_text(rec["top_pick"][f])
+        if rec.get("winner") and rec["winner"].get("reasoning_for_user"):
+            rec["winner"]["reasoning_for_user"] = clean_user_text(rec["winner"]["reasoning_for_user"])
+
     return {
         "message":          message,
         "intent":           final_state.get("intent"),
@@ -426,7 +524,7 @@ async def run_orchestrator(user_id: str, message: str) -> dict:
         "personality":      final_state.get("personality"),
         "budget_status":    (final_state.get("budget") or {}).get("status"),
         "products":         final_state.get("reviews") or [],
-        "recommendation":   final_state.get("recommendation"),
+        "recommendation":   rec,
         "watchlist_result": final_state.get("watchlist_result"),
         "error":            final_state.get("error"),
     }
