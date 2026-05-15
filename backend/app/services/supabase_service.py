@@ -143,8 +143,11 @@ class SupabaseService:
         return result.data or []
 
     async def get_conversation_starters(self, user_id: str, limit: int = 15) -> list:
-        """Her sohbetin ilk user mesajını döner (session bazlı gruplama).
-        Mesajlar arasında 30 dakikadan fazla boşluk varsa yeni sohbet sayılır.
+        """Her sohbetin ilk user mesajını döner.
+
+        Önce mesajın metadata.conversation_id alanına bakar; bu alan yeni mesajlarda
+        konuşmayı net biçimde gruplar. Metadata'sı olmayan eski mesajlar için
+        zaman bazlı (30 dakika) fallback uygulanır.
         """
         from datetime import datetime, timedelta
 
@@ -171,25 +174,42 @@ class SupabaseService:
         if not messages:
             return []
 
-        # Zaman bazlı oturum gruplama (30 dakika eşiği)
         session_gap = timedelta(minutes=30)
-        sessions: list[dict] = []  # her session'ın ilk mesajı
-        last_time: datetime | None = None
+        # Her conversation'ın ilk user mesajını saklayacağımız haritalar:
+        first_by_conv: dict[str, dict] = {}
+        # Eski (metadata'sı olmayan) mesajlar için zaman bazlı fallback grupları
+        legacy_sessions: list[dict] = []
+        last_legacy_time: datetime | None = None
 
         for msg in messages:
             ts = parse_ts(msg["created_at"])
             if ts is None:
-                continue  # parse edilemeyen mesajı atla
+                continue
 
-            if last_time is None or (ts - last_time) > session_gap:
-                # Yeni oturum başladı, bu mesajı kaydet
-                sessions.append(msg)
+            metadata = msg.get("metadata") or {}
+            conv_id = metadata.get("conversation_id") if isinstance(metadata, dict) else None
 
-            last_time = ts
+            if conv_id:
+                # Yeni format: doğrudan conversation_id ile grupla.
+                if conv_id not in first_by_conv:
+                    first_by_conv[conv_id] = msg
+                # Bu mesaj fallback zincirini de bozabilir; legacy timeline'ı
+                # sıfırla ki sonradan gelen eski (metadata'sız) mesajlar
+                # bu yeni mesajla aynı 30-dk içinde diye birleşmesin.
+                last_legacy_time = ts
+            else:
+                # Legacy: 30 dakika gap mantığı
+                if last_legacy_time is None or (ts - last_legacy_time) > session_gap:
+                    legacy_sessions.append(msg)
+                last_legacy_time = ts
 
-        # En yeni oturumlar üstte olsun, limit uygula
-        sessions.reverse()
-        return sessions[:limit]
+        # Her iki grubu birleştir, en yeni üstte olacak şekilde sırala
+        combined = list(first_by_conv.values()) + legacy_sessions
+        combined.sort(
+            key=lambda m: parse_ts(m["created_at"]) or datetime.min,
+            reverse=True,
+        )
+        return combined[:limit]
 
     async def delete_chat_history(self, user_id: str) -> None:
         self.client.table("chat_history").delete().eq("user_id", user_id).execute()
@@ -223,10 +243,14 @@ class SupabaseService:
         result = self.client.table("chat_history").select("metadata").eq("id", chat_id).eq("user_id", user_id).single().execute()
         if not result.data:
             return
-        
+
         metadata = result.data.get("metadata") or {}
         metadata["title"] = title
-        
+
+        self.client.table("chat_history").update({"metadata": metadata}).eq("id", chat_id).eq("user_id", user_id).execute()
+
+    async def update_chat_metadata(self, chat_id: str, user_id: str, metadata: dict) -> None:
+        """Bir chat_history satırının metadata alanını tamamen değiştirir."""
         self.client.table("chat_history").update({"metadata": metadata}).eq("id", chat_id).eq("user_id", user_id).execute()
 
     async def get_chat_thread(self, user_id: str, user_msg_id: str) -> list:
@@ -234,14 +258,76 @@ class SupabaseService:
         return await self.get_session_messages(user_id, user_msg_id)
 
     async def get_session_messages(self, user_id: str, first_msg_id: str) -> list:
-        """Bir session'daki TÜM mesajları döner.
-        first_msg_id: o session'ın ilk kullanıcı mesajının ID'si.
-        O mesajın zamanından başlayarak 30 dakika içindeki tüm mesajları getirir.
-        Timestamp karşılaştırması Supabase'de değil Python'da yapılır (format uyumsuzluğunu önler).
+        """Bir sohbete ait TÜM mesajları döner.
+
+        Öncelik sırası:
+          1. Eğer hedef mesajın metadata.conversation_id alanı varsa, aynı
+             conversation_id'ye sahip tüm mesajlar (user + assistant) döner.
+          2. Yoksa eski 30-dakikalık zaman penceresi mantığı uygulanır
+             (geriye dönük uyumluluk).
         """
         from datetime import datetime, timedelta
 
-        # Önce tüm kullanıcı mesajlarını kronolojik olarak çek
+        def parse_ts(ts_raw: str) -> datetime | None:
+            try:
+                ts_str = ts_raw.replace("Z", "+00:00").replace(" ", "T")
+                if ts_str.endswith("+00"):
+                    ts_str = ts_str[:-3] + "+00:00"
+                return datetime.fromisoformat(ts_str)
+            except Exception:
+                return None
+
+        # Önce hedef mesajı kendisi sorgula — büyük tabloda tek satır lookup hızlıdır.
+        target_resp = (
+            self.client.table("chat_history")
+            .select("*")
+            .eq("id", first_msg_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        target_rows = target_resp.data or []
+        if not target_rows:
+            return []
+        target = target_rows[0]
+
+        target_meta = target.get("metadata") or {}
+        target_conv_id = target_meta.get("conversation_id") if isinstance(target_meta, dict) else None
+
+        # ── 1) Yeni format: conversation_id eşleşmesi ──
+        if target_conv_id:
+            # Kullanıcının metadata.conversation_id'si target_conv_id olan veya
+            # mesajın kendi id'si target_conv_id olan tüm satırları çek.
+            # Supabase PostgREST JSON filter: metadata->>conversation_id=eq.<id>
+            try:
+                resp_meta = (
+                    self.client.table("chat_history")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .eq("metadata->>conversation_id", target_conv_id)
+                    .order("created_at", desc=False)
+                    .execute()
+                )
+                msgs_meta = resp_meta.data or []
+            except Exception:
+                msgs_meta = []
+
+            # İlk user mesajı (conversation root) bazen metadata olmadan kayıt
+            # edilmiş olabilir (özellikle migration öncesi). Onu da ekleyelim.
+            ids_in_set = {m["id"] for m in msgs_meta}
+            if target["id"] not in ids_in_set:
+                msgs_meta.insert(0, target)
+
+            # Kronolojik sırala
+            msgs_meta.sort(key=lambda m: parse_ts(m["created_at"]) or datetime.min)
+            return msgs_meta
+
+        # ── 2) Legacy: 30-dakika zaman penceresi ──
+        start_ts = parse_ts(target["created_at"])
+        if start_ts is None:
+            return [target]
+        end_ts = start_ts + timedelta(minutes=30)
+
         all_msgs = (
             self.client.table("chat_history")
             .select("*")
@@ -251,41 +337,13 @@ class SupabaseService:
             .execute()
         )
         messages = all_msgs.data or []
-        if not messages:
-            return []
-
-        # Hedef mesajı bul ve başlangıç zamanını al
-        start_ts: datetime | None = None
-        for msg in messages:
-            if msg["id"] == first_msg_id:
-                try:
-                    ts_str = msg["created_at"].replace("Z", "+00:00").replace(" ", "T")
-                    # +00 → +00:00 normalize et (bazı Supabase sürümleri kısa format döner)
-                    if ts_str.endswith("+00"):
-                        ts_str = ts_str[:-3] + "+00:00"
-                    start_ts = datetime.fromisoformat(ts_str)
-                except Exception:
-                    pass
-                break
-
-        if start_ts is None:
-            return []
-
-        end_ts = start_ts + timedelta(minutes=30)
-
-        # Python'da filtrele: [start_ts, end_ts] aralığındaki mesajlar
         session_msgs = []
         for msg in messages:
-            try:
-                ts_str = msg["created_at"].replace("Z", "+00:00").replace(" ", "T")
-                if ts_str.endswith("+00"):
-                    ts_str = ts_str[:-3] + "+00:00"
-                ts = datetime.fromisoformat(ts_str)
-            except Exception:
+            ts = parse_ts(msg["created_at"])
+            if ts is None:
                 continue
             if start_ts <= ts <= end_ts:
                 session_msgs.append(msg)
-
         return session_msgs
 
 

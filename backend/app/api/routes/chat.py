@@ -16,12 +16,17 @@ limiter = Limiter(key_func=get_remote_address)
 
 class ChatRequest(BaseModel):
     message: str
+    # Mevcut sohbete devam ediliyorsa, o sohbetin ID'si (conversation_id).
+    # Yeni sohbet ise None gönderilir; backend ilk user mesajının id'sini
+    # conversation_id olarak atar ve frontend'e response'ta döner.
+    conversation_id: str | None = None
 
 
 @router.post("")
 @limiter.limit("10/minute")
 async def chat(request: Request, body: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_id = current_user["sub"]
+    incoming_conversation_id = body.conversation_id
 
     try:
         db = SupabaseService()
@@ -44,7 +49,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 )
             # warn: devam et ama temizlenmiş içeriği kullan
             if sec_result.get("clean_content"):
-                body = ChatRequest(message=sec_result["clean_content"])
+                body = ChatRequest(message=sec_result["clean_content"], conversation_id=incoming_conversation_id)
 
         history = await db.get_chat_history(user_id, limit=6)
 
@@ -54,15 +59,33 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             "chat_history": history,
         })
 
-        # Kullanıcı mesajını kaydet
+        # Kullanıcı mesajını kaydet — conversation_id metadata'ya yazılır
+        # Yeni sohbet ise (incoming_conversation_id None), bu mesajın kendi id'si
+        # conversation_id olur. Mevcut sohbete devam ediliyorsa gelen ID kullanılır.
+        user_metadata: dict = {"is_product_request": conv_result["is_product_request"]}
+        if incoming_conversation_id:
+            user_metadata["conversation_id"] = incoming_conversation_id
+
         user_record = await db.save_chat({
             "user_id": user_id,
             "message": body.message,
             "role": "user",
             "agent_used": "conversation_agent",
-            "metadata": {"is_product_request": conv_result["is_product_request"]}
+            "metadata": user_metadata,
         })
         user_msg_id = user_record.get("id") if user_record else None
+
+        # Yeni sohbetse, conversation_id = ilk user mesajının id'si olur ve
+        # metadata bu ID ile güncellenir (sidebar gruplaması için).
+        conversation_id = incoming_conversation_id or user_msg_id
+        if not incoming_conversation_id and user_msg_id:
+            try:
+                user_metadata["conversation_id"] = user_msg_id
+                await db.update_chat_metadata(user_msg_id, user_id, user_metadata)
+            except Exception as e:
+                # metadata güncellemesi kritik değil; sidebar fallback'i yine
+                # bu mesajı conversation starter olarak gösterir.
+                pass
 
         # ── SOHBET MODU ──────────────────────────────────────────
         if not conv_result["is_product_request"]:
@@ -90,6 +113,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "metadata": {
                     "type": "text",
                     "user_msg_id": user_msg_id,
+                    "conversation_id": conversation_id,
                 }
             })
 
@@ -98,6 +122,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "reply": reply,
                 "is_product_request": False,
                 "user_msg_id": user_msg_id,
+                "conversation_id": conversation_id,
                 "steps_completed": ["conversation"],
                 "products": [],
                 "recommendation": None,
@@ -128,12 +153,14 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "user_id": user_id, "message": reply_text,
                 "role": "assistant", "agent_used": "watchlist_agent",
                 "metadata": {"type": "watchlist", "user_msg_id": user_msg_id,
+                             "conversation_id": conversation_id,
                              "payload": wl},
             })
             return {
                 "message": body.message, "reply": reply_text,
                 "intent": intent, "is_product_request": False,
                 "user_msg_id": user_msg_id,
+                "conversation_id": conversation_id,
                 "steps_completed": result.get("steps_completed", []),
                 "timing": result.get("timing", {}),
                 "products": [], "recommendation": None,
@@ -153,12 +180,14 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "user_id": user_id, "message": reply_text,
                 "role": "assistant", "agent_used": "budget_agent",
                 "metadata": {"type": "budget", "user_msg_id": user_msg_id,
+                             "conversation_id": conversation_id,
                              "budget_status": budget},
             })
             return {
                 "message": body.message, "reply": reply_text,
                 "intent": intent, "is_product_request": False,
                 "user_msg_id": user_msg_id,
+                "conversation_id": conversation_id,
                 "steps_completed": result.get("steps_completed", []),
                 "timing": result.get("timing", {}),
                 "budget_status": budget, "products": [],
@@ -189,6 +218,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             "role": "assistant", "agent_used": "orchestrator",
             "metadata": {
                 "type": "products", "user_msg_id": user_msg_id,
+                "conversation_id": conversation_id,
                 "payload": assistant_payload,
                 "product_count": len(result.get("products", [])),
                 "budget_status": budget_data,
@@ -201,6 +231,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             **result,
             "is_product_request": True,
             "user_msg_id": user_msg_id,
+            "conversation_id": conversation_id,
             "affordability_message": affordability_message,
         }
 

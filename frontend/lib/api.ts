@@ -118,10 +118,10 @@ export const budgetApi = {
 
 // ── Chat ──────────────────────────────────────────────
 export const chatApi = {
-  send: (message: string) =>
+  send: (message: string, conversation_id?: string | null) =>
     apiFetch("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, conversation_id: conversation_id ?? null }),
     }),
 
   getHistory: (limit = 20) => apiFetch(`/api/chat/history?limit=${limit}`),

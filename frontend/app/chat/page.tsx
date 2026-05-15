@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { chatApi, authApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -50,11 +50,14 @@ interface UserInfo { full_name?: string; email?: string; }
 export default function ChatPage() {
   const { loading } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [messages, setMessages] = useState<Msg[]>(WELCOME);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
+  // Aktif konuşmanın ID'si (backend metadata.conversation_id ile birebir).
+  // URL'deki ?load=ID veya backend response'undan gelir.
   const activeThreadId = useRef<string | null>(null);
   const paramHandled = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -161,8 +164,30 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setSending(true);
 
+    // Aktif sohbet ID'sini backend'e ilet — yoksa yeni sohbet açacak.
+    const sendingThreadId = activeThreadId.current;
+
     try {
-      const data = await chatApi.send(text) as ChatResponse;
+      const data = await chatApi.send(text, sendingThreadId) as ChatResponse;
+
+      // İlk mesaj sonrası (yeni sohbet) backend'den conversation_id geliyor.
+      // Bunu yakala, aktif thread olarak set et ve URL'i ?load=<id> ile güncelle.
+      const returnedConvId = data.conversation_id ?? null;
+      if (!sendingThreadId && returnedConvId) {
+        const oldKey = storageKey(null);
+        const newKey = storageKey(returnedConvId);
+        // SessionStorage'daki "new" anahtarını conv ID'li anahtara taşı
+        try {
+          const existing = sessionStorage.getItem(oldKey);
+          if (existing) {
+            sessionStorage.setItem(newKey, existing);
+            sessionStorage.removeItem(oldKey);
+          }
+        } catch {}
+        activeThreadId.current = returnedConvId;
+        // URL'i değiştirirken sayfayı yeniden yükleme — replace ile pushState
+        router.replace(`/chat?load=${returnedConvId}`, { scroll: false });
+      }
 
       if (!data.is_product_request) {
         setMessages((prev) => [...prev, {

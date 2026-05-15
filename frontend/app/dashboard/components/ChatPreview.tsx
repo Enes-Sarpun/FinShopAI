@@ -8,7 +8,8 @@ import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
 
 const STORAGE_KEY = "finshop_chat_messages_v2";
-const THREAD_KEY = "finshop_last_user_msg_id_v2";
+// Geriye uyumluluk için ismi koruyoruz; içinde artık conversation_id saklanır.
+const THREAD_KEY = "finshop_last_conversation_id_v2";
 
 type MsgRole = "user" | "bot" | "products";
 
@@ -101,12 +102,15 @@ export default function ChatPreview() {
     setLoading(true);
 
     try {
-      const data = await chatApi.send(text) as ChatResponse;
+      // Aktif conversation_id'yi backend'e ilet — yoksa yeni sohbet açar
+      const data = await chatApi.send(text, lastMsgId) as ChatResponse;
 
-      // Son user_msg_id'yi sakla — "Tam ekran"da kullanılacak
-      if (data.user_msg_id) {
-        setLastMsgId(data.user_msg_id);
-        sessionStorage.setItem(THREAD_KEY, data.user_msg_id);
+      // Backend'den dönen conversation_id'yi sakla (yeni sohbet ise ilk
+      // mesaj sonrası dolar; sonraki mesajlar aynı sohbete eklenir).
+      const convId = data.conversation_id || data.user_msg_id || null;
+      if (convId) {
+        setLastMsgId(convId);
+        sessionStorage.setItem(THREAD_KEY, convId);
       }
 
       if (!data.is_product_request) {
