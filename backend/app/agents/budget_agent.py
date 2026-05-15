@@ -208,7 +208,17 @@ class BudgetAgent(BaseAgent):
             
             # 5. Tavsiyeler
             savings_tips = self._get_savings_tips(spending_type, budget_analysis)
-            
+
+            # 5b. Bu ay yapılan harcamalar — "harcanabilir" hesabına dahil edilir
+            try:
+                month_spending = await self.db.get_current_month_expense_total(user_id)
+            except Exception as e:
+                self.log_action("Failed to load current month expenses", {"error": str(e)})
+                month_spending = 0.0
+
+            spendable_after_savings = available - savings_goal
+            remaining_spendable = spendable_after_savings - month_spending
+
             # 6. LLM analizi
             llm_analysis = await self._get_llm_analysis(
                 budget=budget,
@@ -228,7 +238,9 @@ class BudgetAgent(BaseAgent):
                     "fixed_expenses": round(budget["monthly_fixed_expenses"], 2),
                     "available_budget": round(available, 2),
                     "savings_goal": round(savings_goal, 2),
-                    "spendable_after_savings": round(available - savings_goal, 2),
+                    "spendable_after_savings": round(spendable_after_savings, 2),
+                    "current_month_spending": round(month_spending, 2),
+                    "remaining_spendable": round(remaining_spendable, 2),
                     "expense_ratio": round(
                         (budget["monthly_fixed_expenses"] / budget["monthly_income"] * 100), 2
                     )
@@ -282,13 +294,14 @@ class BudgetAgent(BaseAgent):
             saved = await self.db.add_expense(record)
             
             self.log_action("Expense added", {"expense_id": saved.get("id")})
-            
+
             return {
                 "success": True,
                 "expense_id": saved.get("id"),
                 "category": category,
                 "amount": round(amount, 2),
                 "description": description,
+                "created_at": saved.get("created_at"),
                 "message": "Harcama başarıyla kaydedildi"
             }
         
@@ -510,51 +523,60 @@ class BudgetAgent(BaseAgent):
     
     
     def _get_savings_tips(self, spending_type: str, budget_analysis: dict) -> list:
-        """Spending type'a göre tasarruf önerileri"""
-        
-        tips = []
+        """Spending type'a göre tasarruf önerileri.
+
+        Çıktı, frontend tarafından i18n ile çevrilebilmesi için yapılandırılmış
+        bir liste olarak döner: her öğe bir sözlüktür:
+            { "key": "<i18n-anahtarı>", "params": { ... } }
+        """
+
+        tips: list[dict] = []
         available = budget_analysis.get("available_budget", 0)
         savings_goal = budget_analysis.get("savings_goal", 0) or 0
-        
+
         if spending_type == "savruk":
             tips = [
-                "💡 Aylık bütçe planı hazırlayın",
-                "💡 Kredi kartı kullanımını sınırlayın",
-                "💡 Her harcamayı kategoriye göre kaydedin",
-                "💡 İmpulsif alışverişlerden kaçının",
-                "💡 Alışveriş öncesi liste yapın"
+                {"key": "savings.tip.savruk.budget"},
+                {"key": "savings.tip.savruk.creditCard"},
+                {"key": "savings.tip.savruk.trackCategory"},
+                {"key": "savings.tip.savruk.avoidImpulse"},
+                {"key": "savings.tip.savruk.shoppingList"},
             ]
-        
+
         elif spending_type == "dengeli":
-            rec_savings = available * 0.2
+            rec_savings = int(round(available * 0.2))
             tips = [
-                "✓ Dengelenmiş harcama alışkanlığınız iyi",
-                f"✓ Aylık ₺{rec_savings:.0f} tasarruf hedefleyebilirsiniz",
-                "✓ Acil durum fonu oluşturmayı düşünün",
-                "✓ Bütçeyi aylık gözden geçirin",
-                "✓ Aboneliklerinizi düzenli kontrol edin"
+                {"key": "savings.tip.balanced.goodHabits"},
+                {"key": "savings.tip.balanced.targetSavings", "params": {"amount": rec_savings}},
+                {"key": "savings.tip.balanced.emergencyFund"},
+                {"key": "savings.tip.balanced.reviewBudget"},
+                {"key": "savings.tip.balanced.checkSubscriptions"},
             ]
-        
+
         else:  # tutumlu
             tips = [
-                "✓ Tasarruf disiplininiz mükemmel",
-                "✓ Tasarrufu yatırıma dönüştürmeyi düşünün",
-                "✓ Pasif gelir kaynakları araştırın",
-                "✓ Kendinize de küçük ödüller verin"
+                {"key": "savings.tip.frugal.discipline"},
+                {"key": "savings.tip.frugal.invest"},
+                {"key": "savings.tip.frugal.passiveIncome"},
+                {"key": "savings.tip.frugal.rewardYourself"},
             ]
-        
+
         if savings_goal > 0:
             if savings_goal > available:
-                tips.append(
-                    f"⚠ Tasarruf hedefi (₺{savings_goal:.0f}) "
-                    f"harcanabilir bütçeyi (₺{available:.0f}) aşıyor"
-                )
+                tips.append({
+                    "key": "savings.tip.goalExceeds",
+                    "params": {
+                        "goal": int(round(savings_goal)),
+                        "available": int(round(available)),
+                    },
+                })
             else:
-                spendable = available - savings_goal
-                tips.append(
-                    f"✓ Tasarruf sonrası harcanabilir: ₺{spendable:.0f}"
-                )
-        
+                spendable = int(round(available - savings_goal))
+                tips.append({
+                    "key": "savings.tip.spendableAfterSavings",
+                    "params": {"amount": spendable},
+                })
+
         return tips
     
     

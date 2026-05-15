@@ -148,54 +148,76 @@ class BudgetCreateRequest(BaseModel):
         return v
 
 
+# İngilizce slug → kanonik form
+VALID_EXPENSE_CATEGORIES = {
+    "groceries", "transport", "health", "education",
+    "entertainment", "clothing", "bills", "other",
+}
+
+# Geriye dönük: eski Türkçe isimleri slug'a çevir
+LEGACY_EXPENSE_CATEGORY_MAP = {
+    "Gıda": "groceries",
+    "Ulaşım": "transport",
+    "Sağlık": "health",
+    "Eğitim": "education",
+    "Eğlence": "entertainment",
+    "Giyim": "clothing",
+    "Diğer": "other",
+}
+
+
 class ExpenseRequest(BaseModel):
     """
     Harcama ekleme isteği.
-    
+
     POST /api/budget/expense endpoint'ine gönderilir.
-    
+
     Örnek:
     {
         "user_id": "uuid",
-        "category": "Gıda",
+        "category": "groceries",
         "amount": 500,
         "description": "Market alışverişi"
     }
-    
-    Geçerli kategoriler:
-    Gıda, Ulaşım, Sağlık, Eğitim, Eğlence, Giyim, Diğer
+
+    Geçerli kategori slug'ları:
+    groceries, transport, health, education,
+    entertainment, clothing, bills, other
+    (Eski TR isimler de geriye dönük uyumluluk için kabul edilir.)
     """
-    
+
     user_id: str = Field(..., description="Kullanıcı ID")
-    
+
     category: str = Field(
         ...,
-        description="Harcama kategorisi"
+        description="Harcama kategorisi (slug)"
     )
-    
+
     amount: float = Field(
         ...,
         gt=0,
         description="Harcama tutarı (TRY)"
     )
-    
+
     description: Optional[str] = Field(
         default=None,
         max_length=500,
         description="Açıklama"
     )
-    
+
     @validator("category")
     def category_must_be_valid(cls, v):
-        valid_categories = [
-            "Gıda", "Ulaşım", "Sağlık", "Eğitim",
-            "Eğlence", "Giyim", "Diğer"
-        ]
-        if v not in valid_categories:
+        if not v:
+            raise ValueError("Kategori zorunludur")
+        # Eski TR isimleri kabul et, slug'a çevir
+        if v in LEGACY_EXPENSE_CATEGORY_MAP:
+            return LEGACY_EXPENSE_CATEGORY_MAP[v]
+        slug = v.strip().lower()
+        if slug not in VALID_EXPENSE_CATEGORIES:
             raise ValueError(
-                f"Geçersiz kategori. Geçerli kategoriler: {', '.join(valid_categories)}"
+                f"Geçersiz kategori. Geçerli kategoriler: {', '.join(sorted(VALID_EXPENSE_CATEGORIES))}"
             )
-        return v
+        return slug
 
 
 class AffordabilityRequest(BaseModel):

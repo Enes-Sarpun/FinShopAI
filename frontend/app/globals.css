@@ -8,7 +8,12 @@
   :root {
     --bg-base: linear-gradient(135deg, #f0f4ff 0%, #fef0f5 50%, #fff5e6 100%);
     --bg-mesh: linear-gradient(135deg, #f0f4ff 0%, #fef0f5 50%, #fff5e6 100%);
-    --bg-mesh-dark: #0f172a;
+    --bg-mesh-dark: linear-gradient(135deg, #0f172a 0%, #1e1b3a 50%, #1a1330 100%);
+  }
+
+  html.dark {
+    --bg-base: var(--bg-mesh-dark);
+    --bg-mesh: var(--bg-mesh-dark);
   }
 
   html {
@@ -243,6 +248,10 @@
     backdrop-filter: blur(12px);
     @apply border border-white/80 text-gray-800 rounded-2xl rounded-bl-sm
            px-4 py-3 text-sm max-w-xs shadow-sm;
+  }
+  .dark .bubble-bot {
+    background: rgba(30, 32, 48, 0.85);
+    @apply border-gray-700/60 text-gray-100;
   }
 
   /* ── Progress bar gradient ── */

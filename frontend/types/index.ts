@@ -18,6 +18,30 @@ export interface Personality {
   created_at: string;
 }
 
+export interface SavingsTip {
+  key: string;
+  params?: Record<string, number | string>;
+}
+
+export type ExpenseCategory =
+  | "groceries"
+  | "transport"
+  | "health"
+  | "education"
+  | "entertainment"
+  | "clothing"
+  | "bills"
+  | "other";
+
+export interface Expense {
+  id: string;
+  user_id: string;
+  category: ExpenseCategory | string;
+  amount: number;
+  description?: string | null;
+  created_at: string;
+}
+
 export interface Budget {
   success: boolean;
   status: "healthy" | "warning" | "critical";
@@ -27,9 +51,14 @@ export interface Budget {
     available_budget: number;
     savings_goal: number;
     spendable_after_savings: number;
+    /** Bu ay (UTC) yapılan harcamaların toplamı */
+    current_month_spending?: number;
+    /** spendable_after_savings - current_month_spending */
+    remaining_spendable?: number;
     expense_ratio: number;
   };
-  savings_tips: string[];
+  // Backend yapılandırılmış dönüyor; eski sürüm için string'i de kabul ediyoruz.
+  savings_tips: Array<string | SavingsTip>;
 }
 
 export interface Product {

@@ -1,7 +1,7 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   ShoppingBag, Mail, Lock, User, ArrowRight, Eye, EyeOff, ArrowLeft,
   Gift, Star, Sparkles, Tag, ShoppingCart, Heart, Zap, Package,
@@ -295,7 +295,17 @@ function BrandPanel({ onSwitch, label, btnText, isRight = false }:
 }
 
 /* ═══════════════════════════════════════
-   ANA SAYFA
+   ANA SAYFA — kitap sayfası gibi açılır/kapanır
+
+   YAKLAŞIM: backface-visibility'ye güvenmek bazı Chromium sürümlerinde
+   sızıntıya yol açıyor (arka yüzeyin içeriği önden ters yazıyla görünüyor).
+   Bu yüzden rotation değerini bir MotionValue ile takip ediyoruz ve
+   yüzlerin opacity'sini (görünür olma) bu değere göre kesip alıyoruz:
+   - |rot| < 90  → Giriş formu görünür, Kayıt görünmez
+   - |rot| >= 90 → Kayıt görünür, Giriş görünmez
+
+   Eşik (90°) sayfanın tam dik olduğu nokta — kullanıcı zaten o anda yüzü
+   göremez, dolayısıyla geçiş hiç fark edilmez. Sızıntı imkânsız.
 ═══════════════════════════════════════ */
 function LoginPageInner() {
   const searchParams = useSearchParams();
@@ -304,6 +314,32 @@ function LoginPageInner() {
   );
   const isRegister = mode === "register";
 
+  // Rotation'ı manuel kontrol ediyoruz; opacity'yi onunla senkronlamak için
+  const rotation = useMotionValue(isRegister ? -180 : 0);
+
+  useEffect(() => {
+    const controls = animate(rotation, isRegister ? -180 : 0, {
+      duration: 1.1,
+      ease: [0.645, 0.045, 0.355, 1],
+    });
+    return () => controls.stop();
+  }, [isRegister, rotation]);
+
+  // Yüz görünürlükleri rotation'a bağlı; geçiş 90°'de yapılır (sayfa edge-on iken)
+  const loginOpacity = useTransform(rotation, (v) => (Math.abs(v) < 90 ? 1 : 0));
+  const registerOpacity = useTransform(rotation, (v) => (Math.abs(v) >= 90 ? 1 : 0));
+  const loginPointer = useTransform(rotation, (v) =>
+    Math.abs(v) < 90 ? "auto" : "none"
+  );
+  const registerPointer = useTransform(rotation, (v) =>
+    Math.abs(v) >= 90 ? "auto" : "none"
+  );
+  const spineOpacity = useTransform(rotation, (v) => {
+    // 0° → 0, 90° → 0.35, 180° → 0.35
+    const a = Math.min(Math.abs(v) / 90, 1);
+    return a * 0.35;
+  });
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8">
       <motion.div
@@ -311,85 +347,108 @@ function LoginPageInner() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        style={{ perspective: 2000 }}
+        style={{ perspective: 2400 }}
       >
-        <div className="flex h-full rounded-[20px] overflow-hidden"
-          style={{ boxShadow: "0 32px 80px rgba(99,102,241,0.25), 0 8px 32px rgba(0,0,0,0.12)" }}>
+        <div
+          className="relative w-full h-full rounded-[20px] overflow-hidden"
+          style={{
+            boxShadow:
+              "0 32px 80px rgba(99,102,241,0.25), 0 8px 32px rgba(0,0,0,0.12)",
+          }}
+        >
+          {/* Sol kapak — login modunda görünür, register modunda altında form kapatır */}
+          <motion.div
+            className="absolute inset-y-0 left-0 w-1/2"
+            initial={false}
+            animate={{ opacity: isRegister ? 0 : 1 }}
+            transition={{ duration: 0.25, delay: isRegister ? 0.55 : 0 }}
+            style={{ pointerEvents: isRegister ? "none" : "auto" }}
+          >
+            <BrandPanel
+              onSwitch={() => setMode("register")}
+              label="Cüzdanını bilen alışveriş asistanınla tanış."
+              btnText="Hesabın yok mu? Kayıt ol"
+            />
+          </motion.div>
 
-          {/* ── SOL PANEL (döner) ── */}
-          <div className="relative w-1/2 h-full" style={{ perspective: 2000 }}>
-            {/* Ön yüz — brand */}
+          {/* Sağ kapak — register modunda görünür, login modunda form üstünü kapatır */}
+          <motion.div
+            className="absolute inset-y-0 right-0 w-1/2"
+            initial={false}
+            animate={{ opacity: isRegister ? 1 : 0 }}
+            transition={{ duration: 0.25, delay: isRegister ? 0.55 : 0 }}
+            style={{ pointerEvents: isRegister ? "auto" : "none" }}
+          >
+            <BrandPanel
+              onSwitch={() => setMode("login")}
+              label="Hesabın varsa giriş yaparak devam et."
+              btnText="Giriş Yap"
+              isRight
+            />
+          </motion.div>
+
+          {/* ── ÜST KATMAN: çevrilen kitap sayfası ── */}
+          <motion.div
+            className="absolute inset-y-0 right-0 w-1/2 overflow-hidden"
+            style={{
+              background: "#ffffff",
+              rotateY: rotation,
+              transformOrigin: "left center",
+              transformStyle: "preserve-3d",
+              zIndex: 2,
+              willChange: "transform",
+            }}
+          >
+            {/* Giriş formu — rotation 0 yakınken görünür */}
             <motion.div
-              className="absolute inset-0"
+              className="absolute inset-0 overflow-hidden bg-white"
               style={{
-                borderRadius: "20px 0 0 20px",
-                backfaceVisibility: "hidden",
-                WebkitBackfaceVisibility: "hidden",
-                transformStyle: "preserve-3d",
+                opacity: loginOpacity,
+                pointerEvents: loginPointer,
               }}
-              animate={{ rotateY: isRegister ? -180 : 0 }}
-              transition={{ duration: 1.1, ease: [0.645, 0.045, 0.355, 1] }}
             >
-              <BrandPanel
-                onSwitch={() => setMode("register")}
-                label="Cüzdanını bilen alışveriş asistanınla tanış."
-                btnText="Hesabın yok mu? Kayıt ol"
+              <div
+                aria-hidden
+                className="absolute top-0 left-0 h-full w-6 pointer-events-none z-10"
+                style={{
+                  background:
+                    "linear-gradient(to right, rgba(0,0,0,0.10), transparent)",
+                }}
               />
+              <LoginForm onSwitch={() => setMode("register")} />
             </motion.div>
 
-            {/* Arka yüz — register formu */}
+            {/* Kayıt formu — rotation 180 yakınken görünür, ters çevrilmiş ki kullanıcı düz okusun */}
             <motion.div
-              className="absolute inset-0 overflow-hidden"
+              className="absolute inset-0 overflow-hidden bg-white"
               style={{
-                background: "rgba(255,255,255,0.97)",
-                borderRadius: "20px 0 0 20px",
-                backfaceVisibility: "hidden",
-                WebkitBackfaceVisibility: "hidden",
-                transformStyle: "preserve-3d",
-                rotateY: 180,
+                opacity: registerOpacity,
+                pointerEvents: registerPointer,
+                transform: "rotateY(180deg)",
               }}
-              animate={{ rotateY: isRegister ? 0 : 180 }}
-              transition={{ duration: 1.1, ease: [0.645, 0.045, 0.355, 1] }}
             >
-              <AnimatePresence mode="wait">
-                {isRegister && (
-                  <motion.div key="reg-form" className="h-full"
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    transition={{ delay: 0.65, duration: 0.25 }}>
-                    <RegisterForm onSwitch={() => setMode("login")} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <div
+                aria-hidden
+                className="absolute top-0 right-0 h-full w-6 pointer-events-none z-10"
+                style={{
+                  background:
+                    "linear-gradient(to left, rgba(0,0,0,0.10), transparent)",
+                }}
+              />
+              <RegisterForm onSwitch={() => setMode("login")} />
             </motion.div>
-          </div>
+          </motion.div>
 
-          {/* ── SAĞ PANEL (sabit) ── */}
-          <div className="relative w-1/2 h-full overflow-hidden"
-            style={{ borderRadius: "0 20px 20px 0" }}>
-            <AnimatePresence mode="wait">
-              {!isRegister ? (
-                <motion.div key="login-panel" className="absolute inset-0"
-                  style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}>
-                  <LoginForm onSwitch={() => setMode("register")} />
-                </motion.div>
-              ) : (
-                <motion.div key="back-panel" className="absolute inset-0"
-                  style={{ borderRadius: "0 20px 20px 0" }}
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  transition={{ duration: 0.4, delay: 0.5 }}>
-                  <BrandPanel
-                    onSwitch={() => setMode("login")}
-                    label="Hesabın varsa giriş yaparak devam et."
-                    btnText="Giriş Yap"
-                    isRight
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
+          {/* Spine — kitap sırtı: sayfa açıldıkça belirginleşen ortadaki gölge */}
+          <motion.div
+            aria-hidden
+            className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 pointer-events-none z-[3]"
+            style={{
+              opacity: spineOpacity,
+              background:
+                "linear-gradient(to right, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.0) 100%)",
+            }}
+          />
         </div>
       </motion.div>
     </div>

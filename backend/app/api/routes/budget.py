@@ -4,11 +4,13 @@
 Budget Routes - API Endpoint'leri
 ===================================
 
-POST /api/budget/create              - Bütçe oluştur ve analiz et
-GET  /api/budget/{user_id}           - Bütçeyi getir
-GET  /api/budget/{user_id}/analysis  - Bütçe analizi getir
-POST /api/budget/expense             - Harcama ekle
-POST /api/budget/affordability       - Uygunluk kontrol et
+POST   /api/budget/create                       - Bütçe oluştur ve analiz et
+GET    /api/budget/{user_id}                    - Bütçeyi getir
+GET    /api/budget/{user_id}/analysis           - Bütçe analizi getir
+POST   /api/budget/expense                      - Harcama ekle
+GET    /api/budget/{user_id}/expenses           - Son harcamaları listele
+DELETE /api/budget/expense/{expense_id}         - Harcamayı sil (undo için)
+POST   /api/budget/affordability                - Uygunluk kontrol et
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -18,7 +20,7 @@ from app.services.llm_service import LLMService
 from app.models.budget import (
     BudgetCreateRequest,
     ExpenseRequest,
-    AffordabilityRequest
+    AffordabilityRequest,
 )
 from app.core.security import get_current_user
 
@@ -196,6 +198,64 @@ async def add_expense(request: ExpenseRequest, current_user: dict = Depends(get_
 
         return result
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{user_id}/expenses")
+async def list_expenses(
+    user_id: str,
+    limit: int = 10,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Kullanıcının son harcamalarını listeler (en yeni önce).
+    """
+    if current_user.get("sub") != user_id:
+        raise HTTPException(status_code=403, detail="Bu hesaba erişim yetkiniz yok")
+
+    if limit < 1 or limit > 100:
+        limit = 10
+
+    try:
+        db = SupabaseService()
+        items = await db.get_recent_expenses(user_id, limit=limit)
+        return {
+            "success": True,
+            "items": items,
+            "count": len(items),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/expense/{expense_id}")
+async def delete_expense(
+    expense_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Harcamayı siler. Sadece kendi harcamasını silebilir.
+
+    "Geri Al" (undo) akışı için kullanılır.
+    """
+    if not expense_id:
+        raise HTTPException(status_code=400, detail="expense_id zorunludur")
+
+    user_id = current_user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Yetki gerekli")
+
+    try:
+        db = SupabaseService()
+        existing = await db.get_expense(user_id, expense_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Harcama bulunamadı")
+
+        await db.delete_expense(user_id, expense_id)
+        return {"success": True, "message": "Harcama silindi"}
     except HTTPException:
         raise
     except Exception as e:

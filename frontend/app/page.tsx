@@ -170,7 +170,7 @@ function Hero({ onCTA }: { onCTA: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [typed, setTyped] = useState("");
-  const fullText = "1500 TL'ye kadar telefon öner...";
+  const fullText = "60.000 TL'ye kadar iyi bir telefon öner...";
 
   /* Mouse parallax */
   const onMouseMove = useCallback((e: React.MouseEvent) => {
@@ -670,7 +670,7 @@ function ElectronicsMockup() {
         transition={{ duration: 0.4 }}
         className="ml-auto w-fit bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-xs rounded-2xl rounded-br-sm px-3 py-2 max-w-[200px] shadow-sm"
       >
-        1500 TL'ye kadar iyi bir telefon öner
+        60.000 TL&apos;ye kadar iyi bir telefon öner
       </motion.div>
       {/* AI response */}
       <motion.div
@@ -678,10 +678,10 @@ function ElectronicsMockup() {
         transition={{ duration: 0.4, delay: 0.5 }}
         className="bg-white rounded-2xl rounded-bl-sm px-3 py-2 shadow-md border border-gray-100 text-xs max-w-[220px]"
       >
-        <p className="text-gray-500 mb-2">Bütçene uygun 3 seçenek buldum:</p>
+        <p className="text-gray-500 mb-2">Bütçene uygun 2 seçenek buldum:</p>
         {[
-          { name: "Redmi 13C", price: "₺1.299", tag: "En Uygun" },
-          { name: "Samsung A15", price: "₺1.499", tag: "En Popüler" },
+          { name: "iPhone 15", price: "₺54.999", tag: "En Uygun" },
+          { name: "Samsung Galaxy S24", price: "₺58.999", tag: "En Popüler" },
         ].map((p) => (
           <div key={p.name} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
             <div>
@@ -730,7 +730,7 @@ function GoalMockup() {
       </div>
       <div className="text-center">
         <p className="text-xs font-semibold text-gray-700">Tatil Hedefi</p>
-        <p className="text-sm font-extrabold text-gray-900 font-numeric">₺3.250 / ₺5.000</p>
+        <p className="text-sm font-extrabold text-gray-900 font-numeric">₺19.500 / ₺30.000</p>
         <p className="text-[11px] text-indigo-500 mt-1">65 gün kaldı</p>
       </div>
       {/* Monthly bars */}
@@ -833,7 +833,7 @@ function HowItHelps() {
       num: "SENARYO 01",
       icon: ShoppingBag,
       title: "Elektronik Alışverişi",
-      desc: 'Yeni telefon almak istiyorsun ama hangisi bütçene uygun? "1500 TL\'ye kadar bana iyi bir telefon öner" de, gerisini biz halledelim.',
+      desc: 'Yeni telefon almak istiyorsun ama hangisi bütçene uygun? "60.000 TL\'ye kadar bana iyi bir telefon öner" de, gerisini biz halledelim.',
       highlight: "Ortalama %19 daha az harcama",
       preview: <ElectronicsMockup />,
       bgLeft: "from-indigo-50 to-purple-50/50",
@@ -842,7 +842,7 @@ function HowItHelps() {
       num: "SENARYO 02",
       icon: Target,
       title: "Hedef Tabanlı Planlama",
-      desc: "3 ay içinde tatil için 5.000 TL biriktirmek mi istiyorsun? FinShop AI aylık alışveriş planını buna göre ayarlar.",
+      desc: "3 ay içinde tatil için 30.000 TL biriktirmek mi istiyorsun? FinShop AI aylık alışveriş planını buna göre ayarlar.",
       highlight: "Hedeflere 2× daha hızlı ulaş",
       preview: <GoalMockup />,
       bgLeft: "from-emerald-50 to-teal-50/50",

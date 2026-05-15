@@ -96,6 +96,18 @@ export const budgetApi = {
       method: "POST",
       body: JSON.stringify({ user_id, amount }),
     }),
+
+  addExpense: (user_id: string, category: string, amount: number, description?: string) =>
+    apiFetch("/api/budget/expense", {
+      method: "POST",
+      body: JSON.stringify({ user_id, category, amount, description: description || null }),
+    }),
+
+  listExpenses: (user_id: string, limit = 10) =>
+    apiFetch(`/api/budget/${user_id}/expenses?limit=${limit}`),
+
+  deleteExpense: (expense_id: string) =>
+    apiFetch(`/api/budget/expense/${expense_id}`, { method: "DELETE" }),
 };
 
 // ── Chat ──────────────────────────────────────────────

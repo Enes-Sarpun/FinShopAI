@@ -28,7 +28,7 @@ interface Msg {
 
 const WELCOME: Msg[] = [
   { role: "bot", text: "Merhaba! Bütçene uygun ürünler bulmana yardım edebilirim 🛍️" },
-  { role: "bot", text: "Ne aramak istersin? Örneğin: \"Anneme 1500 TL hediye öner\"" },
+  { role: "bot", text: "Ne aramak istersin? Örneğin: \"Babama Babalar Günü'ne özel bir hediye almak istiyorum, ne önerirsin?\"" },
 ];
 
 function loadFromStorage(key: string): Msg[] | null {
