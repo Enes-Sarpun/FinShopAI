@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Sparkles, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslation } from "react-i18next";
 
 const TIPS = [
   "Alışveriş öncesi fiyat karşılaştırması yaparak ortalama %15 tasarruf edebilirsin.",
@@ -16,6 +17,7 @@ const TIPS = [
 const SESSION_KEY = "finshop_daily_tip_dismissed";
 
 export default function DailyTip() {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [tip, setTip] = useState("");
 
@@ -48,7 +50,7 @@ export default function DailyTip() {
               <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div className="flex-1">
-              <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-0.5">Günün İpucu</p>
+              <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-0.5">{t("dailyTip.title")}</p>
               <p className="text-sm text-gray-700 dark:text-gray-300">{tip}</p>
             </div>
             <button

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import {
   ShoppingBag, LayoutDashboard, MessageSquarePlus,
   Settings, LogOut, ChevronDown,
@@ -41,15 +42,16 @@ interface ContentProps {
 
 function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   const { theme, setTheme } = useTheme();
+  const { t } = useTranslation();
 
   const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
   const Icon = theme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
-  const label = theme === "dark" ? "Koyu" : theme === "system" ? "Sistem" : "Açık";
+  const label = theme === "dark" ? t("theme.dark") : theme === "system" ? t("theme.system") : t("theme.light");
 
   return (
     <button
       onClick={() => setTheme(next)}
-      title={`Tema: ${label} (değiştir)`}
+      title={`${t("theme.chooseTheme")}: ${label}`}
       className="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
     >
       <Icon className="w-4 h-4 flex-shrink-0" />
@@ -139,6 +141,17 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  const navItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: t("navigation.dashboard") },
+    { href: "/chat", icon: MessageSquarePlus, label: t("navigation.newChat") },
+  ];
+
+  const bottomItems = [
+    { href: "/onboarding/budget", icon: Wallet, label: t("navigation.budgetSettings") },
+    { href: "/onboarding/personality", icon: Brain, label: t("navigation.personalityTest") },
+    { href: "/settings", icon: Settings, label: t("navigation.settings") },
+  ];
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -180,7 +193,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
 
       {/* ── Ana Nav ── */}
       <div className="px-2 pt-3 space-y-0.5">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => (
+        {navItems.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
             href={href}
@@ -202,11 +215,11 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
       {!collapsed && (
         <div className="flex-1 overflow-y-auto px-2 pt-4 min-h-0">
           <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2.5 mb-2">
-            Geçmiş
+            {t("navigation.history")}
           </p>
           <div className="space-y-0.5">
             {history.length === 0 ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 px-2.5 py-2">Henüz sohbet yok</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 px-2.5 py-2">{t("navigation.noChats")}</p>
             ) : (
               history.map((item) => (
                 <ChatItem key={item.id} item={item} onClose={onClose} />
@@ -220,7 +233,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
       {/* ── Alt: Profil ── */}
       <div className="border-t border-gray-200/80 dark:border-gray-700/60 px-2 py-2 space-y-0.5">
         <ThemeToggle collapsed={collapsed} />
-        {BOTTOM_ITEMS.map(({ href, icon: Icon, label }) => (
+        {bottomItems.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
             href={href}
@@ -237,7 +250,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
         <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen((p) => !p)}
-            title={collapsed ? (userName || "Kullanıcı") : undefined}
+            title={collapsed ? (userName || t("navigation.user")) : undefined}
             className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -246,7 +259,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
             {!collapsed && (
               <>
                 <div className="flex-1 text-left min-w-0">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate leading-tight">{userName || "Kullanıcı"}</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate leading-tight">{userName || t("navigation.user")}</p>
                   {userEmail && <p className="text-xs text-gray-400 dark:text-gray-500 truncate leading-tight">{userEmail}</p>}
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
@@ -257,24 +270,24 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
           {userMenuOpen && (
             <div className={`absolute bottom-full mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50 ${collapsed ? "left-full ml-2 w-48" : "left-0 right-0"}`}>
               <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{userName || "Kullanıcı"}</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{userName || t("navigation.user")}</p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{userEmail || ""}</p>
               </div>
               <div className="py-1">
                 <Link href="/settings/account" onClick={() => { setUserMenuOpen(false); onClose?.(); }}
                   className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  Hesabım
+                  {t("navigation.myAccount")}
                 </Link>
                 <Link href="/settings" onClick={() => { setUserMenuOpen(false); onClose?.(); }}
                   className="block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  Ayarlar
+                  {t("navigation.settings")}
                 </Link>
               </div>
               <div className="border-t border-gray-100 dark:border-gray-700 py-1">
                 <button onClick={authApi.logout}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                   <LogOut className="w-4 h-4" />
-                  Çıkış Yap
+                  {t("common.logout")}
                 </button>
               </div>
             </div>
@@ -286,6 +299,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
 }
 
 export default function Sidebar({ userName, userEmail }: SidebarProps) {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [history, setHistory] = useState<ChatHistory[]>([]);
@@ -321,7 +335,7 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
       <button
         className="md:hidden fixed top-3 left-3 z-40 w-9 h-9 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200/80 dark:border-gray-700/60 rounded-xl flex items-center justify-center shadow-sm text-gray-600 dark:text-gray-300"
         onClick={() => setMobileOpen(true)}
-        aria-label="Menüyü aç"
+        aria-label={t("navigation.openMenu")}
       >
         <Menu className="w-4 h-4" />
       </button>

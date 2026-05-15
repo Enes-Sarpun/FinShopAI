@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Star, TrendingDown, ExternalLink, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { wishlistService, type WishlistItem } from "@/lib/wishlistService";
 import toast from "react-hot-toast";
 
@@ -10,20 +11,8 @@ function formatTL(n: number) {
   return new Intl.NumberFormat("tr-TR").format(Math.round(n)) + " ₺";
 }
 
-function RelativeTime({ date }: { date: string }) {
-  const diff = Date.now() - new Date(date).getTime();
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  const label =
-    mins < 1 ? "Az önce" :
-    mins < 60 ? `${mins}dk önce` :
-    hours < 24 ? `${hours}sa önce` :
-    `${days}g önce`;
-  return <span>{label}</span>;
-}
-
 function ItemRow({ item, onRemove }: { item: WishlistItem; onRemove: (id: string) => void }) {
+  const { t } = useTranslation();
   const discount =
     item.reference_price > 0
       ? Math.round(((item.reference_price - item.current_price) / item.reference_price) * 100)
@@ -73,7 +62,7 @@ function ItemRow({ item, onRemove }: { item: WishlistItem; onRemove: (id: string
             target="_blank"
             rel="noopener noreferrer"
             className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-blue-500 transition-colors"
-            title="Ürüne git"
+            title={t("wishlist.goToProduct")}
           >
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
@@ -81,7 +70,7 @@ function ItemRow({ item, onRemove }: { item: WishlistItem; onRemove: (id: string
         <button
           onClick={() => onRemove(item.id)}
           className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
-          title="Takipten çıkar"
+          title={t("wishlist.untrack")}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -103,6 +92,7 @@ function SkeletonRow() {
 }
 
 export default function WishlistWidget() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -126,9 +116,9 @@ export default function WishlistWidget() {
     try {
       await wishlistService.remove(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
-      toast("Takipten çıkarıldı", { icon: "☆" });
+      toast(t("wishlist.removed"), { icon: "☆" });
     } catch {
-      toast.error("Bir hata oluştu.");
+      toast.error(t("wishlist.error"));
     }
   }
 
@@ -144,12 +134,12 @@ export default function WishlistWidget() {
           <div className="w-8 h-8 rounded-xl bg-yellow-50 dark:bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
           </div>
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Yıldızlı Ürünlerim</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{t("wishlist.title")}</h3>
         </div>
         {onDiscount.length > 0 && (
           <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
             <TrendingDown className="w-3 h-3" />
-            {onDiscount.length} indirimde
+            {t("wishlist.onSale", { count: onDiscount.length })}
           </span>
         )}
       </div>
@@ -170,16 +160,16 @@ export default function WishlistWidget() {
             <Star className="w-6 h-6 text-gray-300 dark:text-gray-600" />
           </div>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Henüz takip ettiğin ürün yok
+            {t("wishlist.empty")}
           </p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-            AI asistanla sohbet et, ürünlerin fiyatını takip et.
+            {t("wishlist.emptyDesc")}
           </p>
           <Link
             href="/chat"
             className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
           >
-            Asistanla konuş →
+            {t("wishlist.startChat")}
           </Link>
         </div>
       )}
@@ -191,11 +181,11 @@ export default function WishlistWidget() {
           <div className="grid grid-cols-2 gap-2.5 mb-3">
             <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-3">
               <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{items.length}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Takip edilen</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t("wishlist.tracked")}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-3">
               <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{onDiscount.length}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">İndirimde</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t("wishlist.onSaleShort")}</p>
             </div>
           </div>
 
@@ -210,7 +200,7 @@ export default function WishlistWidget() {
 
           {items.length > 4 && (
             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50">
-              + {items.length - 4} ürün daha takip ediliyor
+              {t("wishlist.moreItems", { count: items.length - 4 })}
             </p>
           )}
         </>

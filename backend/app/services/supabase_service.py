@@ -61,6 +61,51 @@ class SupabaseService:
         result = self.client.table("expenses").insert(data).execute()
         return result.data[0]
 
+    async def get_recent_expenses(self, user_id: str, limit: int = 10) -> list:
+        """Kullanıcının en son eklediği harcamaları döner."""
+        result = (
+            self.client.table("expenses")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
+    async def get_current_month_expense_total(self, user_id: str) -> float:
+        """Bu ay (UTC) eklenen harcamaların toplamını döner."""
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+        result = (
+            self.client.table("expenses")
+            .select("amount")
+            .eq("user_id", user_id)
+            .gte("created_at", month_start)
+            .execute()
+        )
+        rows = result.data or []
+        return float(sum((r.get("amount") or 0) for r in rows))
+
+    async def get_expense(self, user_id: str, expense_id: str) -> dict | None:
+        """Tek bir harcama kaydını döner (sahiplik kontrolü için)."""
+        result = (
+            self.client.table("expenses")
+            .select("*")
+            .eq("id", expense_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    async def delete_expense(self, user_id: str, expense_id: str) -> None:
+        """Bir harcama kaydını siler (sahiplik doğrulamasıyla)."""
+        self.client.table("expenses").delete().eq(
+            "id", expense_id
+        ).eq("user_id", user_id).execute()
+
     async def save_chat(self, data: dict) -> dict:
         result = self.client.table("chat_history").insert(data).execute()
         return result.data[0]

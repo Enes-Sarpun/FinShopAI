@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { budgetApi, personalityApi, authApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import type { Budget, Personality } from "@/types";
@@ -11,6 +12,8 @@ import SavingsTips from "./components/SavingsTips";
 import QuickActions from "./components/QuickActions";
 import DailyTip from "./components/DailyTip";
 import ChatPreview from "./components/ChatPreview";
+import WishlistWidget from "./components/WishlistWidget";
+import ExpenseTracker from "./components/ExpenseTracker";
 
 interface UserInfo { full_name?: string; email?: string; }
 
@@ -39,6 +42,7 @@ function SkeletonSection() {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const { userId, loading } = useAuth();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [personality, setPersonality] = useState<Personality | null>(null);
@@ -66,6 +70,17 @@ export default function DashboardPage() {
     });
   }, [userId]);
 
+  // Harcama ekleme / silme sonrası sadece bütçeyi yeniden çek
+  const refreshBudget = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const b = await budgetApi.getAnalysis(userId);
+      setBudget(b as Budget);
+    } catch {
+      // sessiz hata — kullanıcıya zaten toast var
+    }
+  }, [userId]);
+
   const firstName = user?.full_name?.split(" ")[0] ?? "";
 
   return (
@@ -83,11 +98,11 @@ export default function DashboardPage() {
             transition={{ duration: 0.4 }}
           >
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              Hoş geldin{firstName ? `, ${firstName}` : ""}
+              {t("dashboard.welcomeBase")}{firstName ? `, ${firstName}` : ""}
               <span className="inline-block animate-wave origin-[70%_70%]">👋</span>
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-              Finansal durumuna göz at, alışveriş için asistanı başlat.
+              {t("dashboard.subtitle")}
             </p>
           </motion.div>
 
@@ -113,8 +128,25 @@ export default function DashboardPage() {
 
               {/* Ana içerik grid — 3 sütun */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Sol kolon: profil + tasarruf ipuçları + yıldızlı ürünler */}
+                {/* Sol kolon: harcama takibi + tasarruf ipuçları + yıldızlı ürünler */}
                 <div className="lg:col-span-1 space-y-4">
+                  {userId && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1, duration: 0.4 }}
+                    >
+                      <ExpenseTracker
+                        userId={userId}
+                        monthSpending={budget.financial_metrics.current_month_spending ?? 0}
+                        remainingSpendable={
+                          budget.financial_metrics.remaining_spendable ??
+                          budget.financial_metrics.spendable_after_savings
+                        }
+                        onChange={refreshBudget}
+                      />
+                    </motion.div>
+                  )}
                   <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
                 </div>
 
@@ -147,9 +179,9 @@ export default function DashboardPage() {
               <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <span className="text-3xl">💰</span>
               </div>
-              <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1 text-lg">Bütçen henüz oluşturulmamış</p>
-              <p className="text-gray-400 dark:text-gray-500 text-sm mb-6">Kişiselleştirilmiş öneriler için bütçeni gir.</p>
-              <Link href="/onboarding/budget" className="btn-primary inline-block">Bütçe Oluştur</Link>
+              <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1 text-lg">{t("dashboard.budgetNotCreated")}</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm mb-6">{t("dashboard.budgetNotCreatedDesc")}</p>
+              <Link href="/onboarding/budget" className="btn-primary inline-block">{t("dashboard.createBudget")}</Link>
             </motion.div>
           )}
         </div>
