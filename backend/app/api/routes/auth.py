@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel, Field
 from app.models.user import RegisterRequest, LoginRequest, UserResponse
 from app.services.supabase_service import SupabaseService
 from app.core.security import get_current_user
@@ -6,6 +7,15 @@ from app.core.logger import get_logger
 
 router = APIRouter()
 logger = get_logger("auth")
+
+
+# ~2.7 MB base64 ≈ 2 MB binary. Frontend zaten 2 MB sınırı uyguluyor; biraz
+# margin bırakıyoruz çünkü base64 ~%33 büyütüyor.
+MAX_AVATAR_LENGTH = 3_000_000
+
+
+class AvatarUpdateRequest(BaseModel):
+    avatar_url: str | None = Field(default=None)
 
 
 @router.post("/register")
@@ -65,3 +75,38 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil bulunamadı")
     return profile
+
+
+@router.patch("/me/avatar")
+async def update_avatar(
+    body: AvatarUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Kullanıcının profil fotoğrafını günceller.
+    avatar_url: base64 data URL (örn. 'data:image/png;base64,...') veya null (kaldırmak için).
+    """
+    user_id = current_user["sub"]
+    avatar = body.avatar_url
+
+    if avatar is not None:
+        avatar = avatar.strip()
+        if avatar == "":
+            avatar = None
+        else:
+            if not avatar.startswith("data:image/"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="avatar_url 'data:image/...' formatında olmalı",
+                )
+            if len(avatar) > MAX_AVATAR_LENGTH:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Görsel çok büyük (en fazla ~2 MB).",
+                )
+
+    try:
+        db = SupabaseService()
+        await db.update_avatar(user_id, avatar)
+        return {"success": True, "avatar_url": avatar}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

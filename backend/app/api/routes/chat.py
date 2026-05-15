@@ -259,6 +259,28 @@ async def delete_chat_history(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/conversation/{conversation_id}")
+async def delete_single_conversation(
+    conversation_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Tek bir sohbeti siler.
+    conversation_id: Sidebar'da listelenen sohbetin (ilk user mesajının) id'si.
+    O session'a ait tüm mesajlar (kullanıcı + asistan) silinir.
+    """
+    user_id = current_user["sub"]
+    try:
+        db = SupabaseService()
+        deleted = await db.delete_chat_session(user_id, conversation_id)
+        if deleted == 0:
+            raise HTTPException(status_code=404, detail="Sohbet bulunamadı")
+        return {"success": True, "deleted_count": deleted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class UpdateTitleRequest(BaseModel):
     title: str
 

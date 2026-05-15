@@ -194,6 +194,30 @@ class SupabaseService:
     async def delete_chat_history(self, user_id: str) -> None:
         self.client.table("chat_history").delete().eq("user_id", user_id).execute()
 
+    async def delete_chat_session(self, user_id: str, first_msg_id: str) -> int:
+        """Tek bir sohbeti (session) siler.
+        first_msg_id: o session'ın ilk kullanıcı mesajının ID'si.
+        get_session_messages ile aynı mantık (30 dk pencere) kullanılır,
+        böylece sidebar'da gösterilen sohbet ile birebir aynı mesajlar silinir.
+        Geriye silinen kayıt sayısı döner.
+        """
+        messages = await self.get_session_messages(user_id, first_msg_id)
+        if not messages:
+            return 0
+
+        ids = [m["id"] for m in messages if m.get("id")]
+        if not ids:
+            return 0
+
+        self.client.table("chat_history").delete().in_("id", ids).eq("user_id", user_id).execute()
+        return len(ids)
+
+    async def update_avatar(self, user_id: str, avatar_url: str | None) -> None:
+        """Kullanıcının profil fotoğrafını günceller (base64 data URL veya None)."""
+        self.client.table("profiles").update(
+            {"avatar_url": avatar_url}
+        ).eq("id", user_id).execute()
+
     async def update_chat_title(self, chat_id: str, user_id: str, title: str) -> None:
         """Sohbet başlığını metadata içinde günceller."""
         result = self.client.table("chat_history").select("metadata").eq("id", chat_id).eq("user_id", user_id).single().execute()

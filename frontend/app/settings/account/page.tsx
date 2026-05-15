@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 
-interface UserInfo { full_name?: string; email?: string; }
+interface UserInfo { full_name?: string; email?: string; avatar_url?: string | null; }
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
@@ -37,7 +37,6 @@ const BANNER_PRESETS = [
 ];
 
 const BANNER_KEY = "finshop_banner";
-const AVATAR_KEY = "finshop_avatar";
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 // ── Inline edit field ──────────────────────────────────────────────────────
@@ -259,14 +258,13 @@ export default function AccountPage() {
     const saved = localStorage.getItem(BANNER_KEY);
     if (saved) setBannerStyle(saved);
 
-    const savedAvatar = localStorage.getItem(AVATAR_KEY);
-    if (savedAvatar) setAvatar(savedAvatar);
-
     Promise.all([
       authApi.me().catch(() => null),
       chatApi.getHistory(100).catch(() => null),
     ]).then(([u, h]) => {
-      setUser(u as UserInfo | null);
+      const profile = u as UserInfo | null;
+      setUser(profile);
+      if (profile?.avatar_url) setAvatar(profile.avatar_url);
       const hist = (h as { history?: unknown[] } | null)?.history ?? [];
       setSearchCount(hist.length);
     }).finally(() => setFetching(false));
@@ -294,10 +292,17 @@ export default function AccountPage() {
     fileInputRef.current?.click();
   }
 
-  function handleAvatarRemove() {
+  async function handleAvatarRemove() {
+    const prev = avatar;
     setAvatar(null);
-    localStorage.removeItem(AVATAR_KEY);
-    toast.success(t("account.removePhoto"));
+    try {
+      await authApi.updateAvatar(null);
+      setUser((u) => (u ? { ...u, avatar_url: null } : u));
+      toast.success(t("account.removePhoto"));
+    } catch {
+      setAvatar(prev);
+      toast.error(t("account.avatarSaveFailed"));
+    }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -306,26 +311,30 @@ export default function AccountPage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Lütfen bir görsel dosyası seçin.");
+      toast.error(t("account.pleasePickImage"));
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      toast.error("Görsel 2 MB'tan küçük olmalı.");
+      toast.error(t("account.avatarTooLarge"));
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUrl = reader.result as string;
+      const previous = avatar;
+      setAvatar(dataUrl);
+      const saving = toast.loading(t("account.uploadingPhoto"));
       try {
-        localStorage.setItem(AVATAR_KEY, dataUrl);
-        setAvatar(dataUrl);
-        toast.success(t("account.changePhoto"));
+        await authApi.updateAvatar(dataUrl);
+        setUser((u) => (u ? { ...u, avatar_url: dataUrl } : u));
+        toast.success(t("account.changePhoto"), { id: saving });
       } catch {
-        toast.error("Görsel kaydedilemedi.");
+        setAvatar(previous);
+        toast.error(t("account.avatarSaveFailed"), { id: saving });
       }
     };
-    reader.onerror = () => toast.error("Görsel okunamadı.");
+    reader.onerror = () => toast.error(t("account.avatarReadFailed"));
     reader.readAsDataURL(file);
   }
 

@@ -8,7 +8,7 @@ import {
   ShoppingBag, LayoutDashboard, MessageSquarePlus,
   Settings, LogOut, ChevronDown,
   Wallet, Brain, PanelLeftClose, PanelLeftOpen, Menu, X,
-  Sun, Moon, Monitor, Pencil, Check, Star,
+  Sun, Moon, Monitor, Pencil, Check, Star, Trash2,
 } from "lucide-react";
 import { authApi, chatApi } from "@/lib/api";
 import { useTheme } from "@/lib/ThemeContext";
@@ -25,6 +25,7 @@ interface ContentProps {
   userName?: string;
   userEmail?: string;
   history: ChatHistory[];
+  onDeleteHistoryItem: (id: string) => void;
   onClose?: () => void;
 }
 
@@ -48,10 +49,16 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function ChatItem({ item, onClose }: { item: ChatHistory; onClose?: () => void }) {
+function ChatItem({ item, onDelete, onClose }: {
+  item: ChatHistory;
+  onDelete: (id: string) => void;
+  onClose?: () => void;
+}) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState((item.metadata?.title as string) || item.message);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const searchParams = useSearchParams();
   const isActive = searchParams?.get("load") === item.id;
 
@@ -69,6 +76,25 @@ function ChatItem({ item, onClose }: { item: ChatHistory; onClose?: () => void }
     } finally {
       setIsSaving(false);
       setIsEditing(false);
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(t("navigation.confirmDeleteChat"))) return;
+    setIsDeleting(true);
+    try {
+      await chatApi.deleteConversation(item.id);
+      onDelete(item.id);
+      // Aktif sohbet silindiyse yeni sohbet sayfasına dön
+      if (isActive) {
+        window.location.href = "/chat";
+      }
+    } catch {
+      alert(t("navigation.deleteChatError"));
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -111,18 +137,28 @@ function ChatItem({ item, onClose }: { item: ChatHistory; onClose?: () => void }
       >
         {displayTitle.length > 32 ? displayTitle.slice(0, 32) + "…" : displayTitle}
       </Link>
-      <button
-        onClick={() => setIsEditing(true)}
-        className="opacity-0 group-hover:opacity-100 p-1 flex-shrink-0 text-gray-400 hover:text-blue-500 transition-opacity"
-        title="Yeniden adlandır"
-      >
-        <Pencil className="w-3 h-3" />
-      </button>
+      <div className="flex items-center gap-0.5 flex-shrink-0">
+        <button
+          onClick={() => setIsEditing(true)}
+          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-500 transition-opacity"
+          title={t("navigation.rename")}
+        >
+          <Pencil className="w-3 h-3" />
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity disabled:opacity-50"
+          title={t("navigation.deleteChat")}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   );
 }
 
-function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onClose }: ContentProps) {
+function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onDeleteHistoryItem, onClose }: ContentProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -212,7 +248,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
               <p className="text-xs text-gray-400 dark:text-gray-500 px-2.5 py-2">{t("navigation.noChats")}</p>
             ) : (
               history.map((item) => (
-                <ChatItem key={item.id} item={item} onClose={onClose} />
+                <ChatItem key={item.id} item={item} onDelete={onDeleteHistoryItem} onClose={onClose} />
               ))
             )}
           </div>
@@ -303,6 +339,10 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
       .catch(() => {});
   }, []);
 
+  const handleDeleteHistoryItem = (id: string) => {
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+  };
+
   return (
     <>
       {/* ── Desktop sidebar ── */}
@@ -318,6 +358,7 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
           userName={userName}
           userEmail={userEmail}
           history={history}
+          onDeleteHistoryItem={handleDeleteHistoryItem}
         />
       </aside>
 
@@ -358,6 +399,7 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
                 userName={userName}
                 userEmail={userEmail}
                 history={history}
+                onDeleteHistoryItem={handleDeleteHistoryItem}
                 onClose={() => setMobileOpen(false)}
               />
             </motion.aside>

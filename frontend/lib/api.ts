@@ -62,6 +62,12 @@ export const authApi = {
   },
 
   me: () => apiFetch("/api/auth/me"),
+
+  updateAvatar: (avatar_url: string | null) =>
+    apiFetch("/api/auth/me/avatar", {
+      method: "PATCH",
+      body: JSON.stringify({ avatar_url }),
+    }),
 };
 
 // ── Personality ───────────────────────────────────────
@@ -126,6 +132,9 @@ export const chatApi = {
   getThread: (userMsgId: string) => apiFetch(`/api/chat/thread/${userMsgId}`),
 
   deleteHistory: () => apiFetch("/api/chat/history", { method: "DELETE" }),
+
+  deleteConversation: (conversation_id: string) =>
+    apiFetch(`/api/chat/conversation/${conversation_id}`, { method: "DELETE" }),
 
   updateTitle: (id: string, title: string) =>
     apiFetch(`/api/chat/${id}/title`, {

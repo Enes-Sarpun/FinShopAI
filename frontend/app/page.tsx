@@ -1118,8 +1118,7 @@ export default function Home() {
   const router = useRouter();
 
   const handleCTA = () => {
-    const token = localStorage.getItem("access_token");
-    router.push(token ? "/dashboard" : "/login?mode=register");
+    router.push("/login?mode=register");
   };
 
   return (
