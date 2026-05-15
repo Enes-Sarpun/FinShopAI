@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.personality import PersonalitySubmitRequest, PersonalityResponse, QuestionsResponse
 from app.agents.personality_agent import PersonalityAgent
@@ -6,6 +8,41 @@ from app.services.supabase_service import SupabaseService
 from app.core.security import get_current_user
 
 router = APIRouter()
+
+
+def _row_to_response(row: dict) -> dict:
+    """personality_profiles row'unu PersonalityResponse şemasına çevirir."""
+    raw_llm = row.get("llm_analysis") or {}
+    if isinstance(raw_llm, str):
+        try:
+            raw_llm = json.loads(raw_llm)
+        except (json.JSONDecodeError, ValueError):
+            # Bazı eski kayıtlar Python repr formatında (tek tırnaklı) saklanmış olabilir.
+            try:
+                import ast
+                raw_llm = ast.literal_eval(raw_llm)
+                if not isinstance(raw_llm, dict):
+                    raw_llm = {}
+            except (ValueError, SyntaxError):
+                raw_llm = {}
+
+    return {
+        "profile_id": row.get("id") or row.get("profile_id") or "",
+        "spending_type": row.get("spending_type") or raw_llm.get("spending_type") or "dengeli",
+        "rule_score": row.get("rule_score") or raw_llm.get("rule_score") or 0,
+        "risk_score": row.get("risk_score") or raw_llm.get("risk_score") or 0,
+        "impulsive_score": row.get("impulsive_score") or raw_llm.get("impulsive_score") or 0,
+        "saving_score": row.get("saving_score") or raw_llm.get("saving_score") or 0,
+        "research_score": row.get("research_score") or raw_llm.get("research_score") or 0,
+        "strengths": row.get("strengths") or raw_llm.get("strengths") or [],
+        "weaknesses": row.get("weaknesses") or raw_llm.get("weaknesses") or [],
+        "recommendations": row.get("recommendations") or raw_llm.get("recommendations") or "",
+        "personality_summary": (
+            row.get("personality_summary")
+            or raw_llm.get("personality_summary")
+            or ""
+        ),
+    }
 
 
 def get_agent() -> PersonalityAgent:
@@ -81,4 +118,4 @@ async def get_personality(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil bulunamadı")
 
-    return profile
+    return _row_to_response(profile)

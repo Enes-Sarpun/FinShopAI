@@ -15,8 +15,31 @@ Veri Akışı:
 5. Sonuç döner
 """
 
+import time
+
 from app.agents.base_agent import BaseAgent
 from app.prompts.budget_prompts import BUDGET_SYSTEM, BUDGET_ANALYSIS_PROMPT
+
+
+# ── Memory cache for budget LLM analysis ──────────────────────────────────
+# LLM çağrısı ~15 saniye sürüyor ve sonuç bütçe input'ları değişmediği sürece
+# pratikte aynı kalıyor. Aynı (user, spending_type, gelir/gider) imzasına
+# karşılık gelen sonucu in-memory bir tablo'da TTL süresince saklıyoruz.
+# Bu sayede dashboard her açılışta LLM'i çağırmıyor; sadece bütçe değiştiğinde
+# veya TTL dolduğunda yeniden hesaplanıyor.
+_LLM_ANALYSIS_CACHE: dict[str, tuple[float, dict]] = {}
+_LLM_ANALYSIS_TTL = 30 * 60  # 30 dakika
+
+
+def _llm_cache_key(user_id: str, budget: dict, spending_type: str, risk_score: int) -> str:
+    return "|".join([
+        user_id or "anon",
+        spending_type or "",
+        str(risk_score),
+        str(budget.get("monthly_income") or 0),
+        str(budget.get("monthly_fixed_expenses") or 0),
+        str(budget.get("savings_goal") or 0),
+    ])
 
 
 class BudgetAgent(BaseAgent):
@@ -219,11 +242,12 @@ class BudgetAgent(BaseAgent):
             spendable_after_savings = available - savings_goal
             remaining_spendable = spendable_after_savings - month_spending
 
-            # 6. LLM analizi
+            # 6. LLM analizi (cache'li — bütçe değişmediği sürece tekrar çağrılmaz)
             llm_analysis = await self._get_llm_analysis(
+                user_id=user_id,
                 budget=budget,
                 spending_type=spending_type,
-                risk_score=risk_score
+                risk_score=risk_score,
             )
             
             self.log_action("Analysis complete", {"status": status})
@@ -582,32 +606,51 @@ class BudgetAgent(BaseAgent):
     
     async def _get_llm_analysis(
         self,
+        user_id: str,
         budget: dict,
         spending_type: str,
-        risk_score: int
+        risk_score: int,
     ) -> dict:
-        """LLM ile detaylı analiz yap"""
-        
+        """LLM ile detaylı analiz yap. Aynı bütçe imzası için memory cache uygular."""
+
+        cache_key = _llm_cache_key(user_id, budget, spending_type, risk_score)
+        now = time.time()
+        cached = _LLM_ANALYSIS_CACHE.get(cache_key)
+        if cached is not None:
+            cached_at, cached_value = cached
+            if now - cached_at < _LLM_ANALYSIS_TTL:
+                self.log_action("LLM analysis cache hit")
+                return cached_value
+            # TTL doldu, cache'i temizle
+            _LLM_ANALYSIS_CACHE.pop(cache_key, None)
+
         try:
             prompt = BUDGET_ANALYSIS_PROMPT.format(
                 monthly_income=budget.get("monthly_income", 0),
                 fixed_expenses=budget.get("monthly_fixed_expenses", 0),
                 savings_goal=budget.get("savings_goal", 0),
                 spending_type=spending_type,
-                risk_score=risk_score
+                risk_score=risk_score,
             )
-            
+
             analysis = await self.call_llm_json(
                 prompt,
-                system=BUDGET_SYSTEM
+                system=BUDGET_SYSTEM,
             )
-            
+
             self.log_action("LLM analysis complete")
+            _LLM_ANALYSIS_CACHE[cache_key] = (now, analysis)
             return analysis
-        
+
         except Exception as e:
             self.log_action("LLM analysis failed", {"error": str(e)})
-            return {
+            # Hata durumunda da kısa bir "boş" cache koy ki kullanıcı hemen ardından
+            # yeniden tetiklediğinde 6+ saniyelik rate-limit retry'a tekrar düşmesin.
+            fallback = {
                 "error": str(e),
-                "message": "LLM analizi başarısız"
+                "message": "LLM analizi başarısız",
             }
+            # Sadece quota/rate-limit hatalarında kısa süreli cache (60 sn)
+            if any(kw in str(e).lower() for kw in ["quota", "rate", "429", "resource exhausted"]):
+                _LLM_ANALYSIS_CACHE[cache_key] = (now - (_LLM_ANALYSIS_TTL - 60), fallback)
+            return fallback

@@ -7,8 +7,8 @@ import { chatApi } from "@/lib/api";
 import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
 
-const STORAGE_KEY = "finshop_chat_messages";
-const THREAD_KEY = "finshop_last_user_msg_id";
+const STORAGE_KEY = "finshop_chat_messages_v2";
+const THREAD_KEY = "finshop_last_user_msg_id_v2";
 
 type MsgRole = "user" | "bot" | "products";
 
@@ -115,9 +115,6 @@ export default function ChatPreview() {
         return;
       }
 
-      if (data.affordability_message) {
-        setMessages((prev) => [...prev, { role: "bot", text: data.affordability_message! }]);
-      }
       if (data.recommendation?.summary) {
         setMessages((prev) => [...prev, { role: "bot", text: data.recommendation.summary }]);
       }

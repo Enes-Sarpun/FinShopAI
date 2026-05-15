@@ -20,24 +20,51 @@ logger = get_logger("llm_service")
 _MAX_RETRIES = 3
 _BASE_DELAY = 1.5  # saniye (exponential backoff için)
 
+# ── Modül-seviyesi paylaşımlı durum ─────────────────────────────────────────
+# Gemini'yi sadece bir kez configure et + her (system_instruction) için tek bir
+# GenerativeModel instance'ı tut. Bu sayede her istekte yeni model nesnesi
+# oluşturmuyor, log spam'ini ve gereksiz kurulum maliyetini ortadan kaldırıyoruz.
+_GEMINI_CONFIGURED = False
+_BASE_MODEL: "genai.GenerativeModel | None" = None
+_SYSTEM_MODEL_CACHE: dict[str, "genai.GenerativeModel"] = {}
+
+
+def _ensure_configured() -> None:
+    global _GEMINI_CONFIGURED, _BASE_MODEL
+    if _GEMINI_CONFIGURED:
+        return
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    _BASE_MODEL = genai.GenerativeModel(settings.GEMINI_MODEL)
+    _GEMINI_CONFIGURED = True
+    logger.info(f"LLM initialized: {settings.GEMINI_MODEL}")
+
+
+def _get_model(system: str | None) -> "genai.GenerativeModel":
+    _ensure_configured()
+    if not system:
+        return _BASE_MODEL  # type: ignore[return-value]
+    cached = _SYSTEM_MODEL_CACHE.get(system)
+    if cached is None:
+        cached = genai.GenerativeModel(
+            settings.GEMINI_MODEL,
+            system_instruction=system,
+        )
+        _SYSTEM_MODEL_CACHE[system] = cached
+    return cached
+
 
 class LLMService:
+    """Hafif facade. Asıl Gemini yapılandırması ve model cache modül
+    seviyesinde tutuluyor; bu sınıfı her istekte oluşturmak ucuz.
+    """
+
     def __init__(self):
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
-        logger.info(f"LLM initialized: {settings.GEMINI_MODEL}")
+        _ensure_configured()
 
     # ── Ana üretim metodu (async, blocking Gemini thread'e taşındı) ──────────
     async def generate(self, prompt: str, system: str = None) -> str:
         last_error = None
-
-        # system_instruction varsa model'e ayrı parametre olarak ver
-        model = self.model
-        if system:
-            model = genai.GenerativeModel(
-                settings.GEMINI_MODEL,
-                system_instruction=system,
-            )
+        model = _get_model(system)
 
         for attempt in range(1, _MAX_RETRIES + 1):
             try:

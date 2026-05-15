@@ -58,16 +58,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
     Promise.all([
       budgetApi.getAnalysis(userId).catch(() => null),
       personalityApi.getProfile(userId).catch(() => null),
       authApi.me().catch(() => null),
     ]).then(([b, p, u]) => {
+      if (cancelled) return;
       setBudget(b as Budget | null);
       setPersonality(p as Personality | null);
       setUser(u as UserInfo | null);
       setFetching(false);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   // Harcama ekleme / silme sonrası sadece bütçeyi yeniden çek

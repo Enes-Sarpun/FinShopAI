@@ -13,7 +13,7 @@ import { wishlistService } from "@/lib/wishlistService";
 import Sidebar from "@/app/dashboard/components/Sidebar";
 
 function storageKey(id: string | null) {
-  return id ? `finshop_thread_${id}` : "finshop_thread_new";
+  return id ? `finshop_thread_v2_${id}` : "finshop_thread_v2_new";
 }
 
 type MsgRole = "user" | "bot" | "products";
@@ -103,10 +103,8 @@ export default function ChatPage() {
                 products?: Product[];
                 budget_status?: string;
               };
-              if (payload?.affordability_message)
-                restored.push({ role: "bot", text: payload.affordability_message, budgetStatus: payload.budget_status });
               if (payload?.summary)
-                restored.push({ role: "bot", text: payload.summary });
+                restored.push({ role: "bot", text: payload.summary, budgetStatus: payload.budget_status });
               if (payload?.products?.length)
                 restored.push({ role: "products", products: payload.products, topPick: payload.top_pick ?? null, advice: payload.financial_advice ?? undefined });
             } else {
@@ -175,10 +173,8 @@ export default function ChatPage() {
       }
 
       const newMsgs: Msg[] = [];
-      if (data.affordability_message)
-        newMsgs.push({ role: "bot", text: data.affordability_message, budgetStatus: data.budget_status });
       if (data.recommendation?.summary)
-        newMsgs.push({ role: "bot", text: data.recommendation.summary });
+        newMsgs.push({ role: "bot", text: data.recommendation.summary, budgetStatus: data.budget_status });
       if (data.products?.length > 0) {
         newMsgs.push({ role: "products", products: data.products, topPick: data.recommendation?.top_pick ?? null, advice: data.recommendation?.financial_advice ?? undefined });
       } else {
@@ -213,7 +209,7 @@ export default function ChatPage() {
     try {
       await chatApi.deleteHistory();
       Object.keys(sessionStorage)
-        .filter((k) => k.startsWith("finshop_thread_"))
+        .filter((k) => k.startsWith("finshop_thread_v2_"))
         .forEach((k) => sessionStorage.removeItem(k));
       setMessages(WELCOME);
       window.location.href = "/chat";
@@ -288,7 +284,7 @@ export default function ChatPage() {
                 ref={inputRef}
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 resize-none outline-none leading-relaxed"
-                placeholder="Bir şey sor... (Enter ile gönder)"
+                placeholder="Bir şey sor..."
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
@@ -300,8 +296,7 @@ export default function ChatPage() {
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
             </div>
-            <div className="flex flex-col items-center gap-1 mt-2">
-              <p className="text-xs text-gray-400">Shift+Enter ile satır ekle · Enter ile gönder</p>
+            <div className="flex justify-center mt-2">
               <p className="text-xs text-gray-400/70">
                 FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
               </p>
