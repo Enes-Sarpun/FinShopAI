@@ -349,9 +349,9 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-white/60 dark:border-gray-700/60 px-4 py-4 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-end gap-3 bg-white/80 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-400 transition-all shadow-sm">
+        <div className="border-t border-white/40 dark:border-gray-700/40 px-4 py-5 flex-shrink-0" style={{ background: "var(--bg-mesh)" }}>
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 border border-white/60 dark:border-gray-600/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-400/60 focus-within:border-blue-400/60 transition-all shadow-sm" style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
               <textarea
                 ref={inputRef}
                 rows={1}
@@ -368,11 +368,9 @@ export default function ChatPage() {
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
             </div>
-            <div className="flex justify-center mt-2">
-              <p className="text-xs text-gray-400/70">
-                FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
-              </p>
-            </div>
+            <p className="text-center text-xs text-gray-400/60 mt-2">
+              FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
+            </p>
           </div>
         </div>
       </div>
