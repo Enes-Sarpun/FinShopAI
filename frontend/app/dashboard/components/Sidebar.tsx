@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -322,7 +322,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
   );
 }
 
-export default function Sidebar({ userName, userEmail }: SidebarProps) {
+function SidebarInner({ userName, userEmail }: SidebarProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -425,5 +425,13 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+export default function Sidebar({ userName, userEmail }: SidebarProps) {
+  return (
+    <Suspense fallback={null}>
+      <SidebarInner userName={userName} userEmail={userEmail} />
+    </Suspense>
   );
 }

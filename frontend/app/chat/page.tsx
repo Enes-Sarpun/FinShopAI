@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { chatApi, authApi } from "@/lib/api";
@@ -47,7 +47,7 @@ function saveToStorage(key: string, msgs: Msg[]) {
 
 interface UserInfo { full_name?: string; email?: string; }
 
-export default function ChatPage() {
+function ChatPageInner() {
   const { loading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -693,5 +693,13 @@ function ProductCard({ product, overBudget }: { product: Product; overBudget?: b
         />
       </button>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatPageInner />
+    </Suspense>
   );
 }
