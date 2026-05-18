@@ -43,7 +43,7 @@ function loadFromStorage(key: string): Msg[] | null {
 }
 
 function saveToStorage(key: string, msgs: Msg[]) {
-  try { sessionStorage.setItem(key, JSON.stringify(msgs)); } catch {}
+  try { sessionStorage.setItem(key, JSON.stringify(msgs)); } catch { }
 }
 
 interface UserInfo { full_name?: string; email?: string; }
@@ -57,26 +57,21 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
-  // Aktif konuşmanın ID'si (backend metadata.conversation_id ile birebir).
-  // URL'deki ?load=ID veya backend response'undan gelir.
   const activeThreadId = useRef<string | null>(null);
   const paramHandled = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    authApi.me().then((d) => setUser(d as UserInfo)).catch(() => {});
+    authApi.me().then((d) => setUser(d as UserInfo)).catch(() => { });
     setHydrated(true);
   }, []);
-
- 
 
   const loadId = searchParams.get("load");
   const q = searchParams.get("q");
 
   useEffect(() => {
     if (!hydrated) return;
-       
 
     if (loadId) {
       activeThreadId.current = loadId;
@@ -132,13 +127,11 @@ export default function ChatPage() {
       return;
     }
 
-
     activeThreadId.current = null;
     const cached = loadFromStorage(storageKey(null));
     if (cached) setMessages(cached);
     paramHandled.current = true;
     if (q) send(q);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, loadId, q]);
 
   useEffect(() => {
@@ -170,28 +163,23 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setSending(true);
 
-    // Aktif sohbet ID'sini backend'e ilet — yoksa yeni sohbet açacak.
     const sendingThreadId = activeThreadId.current;
 
     try {
       const data = await chatApi.send(text, sendingThreadId) as ChatResponse;
 
-      // İlk mesaj sonrası (yeni sohbet) backend'den conversation_id geliyor.
-      // Bunu yakala, aktif thread olarak set et ve URL'i ?load=<id> ile güncelle.
       const returnedConvId = data.conversation_id ?? null;
       if (!sendingThreadId && returnedConvId) {
         const oldKey = storageKey(null);
         const newKey = storageKey(returnedConvId);
-        // SessionStorage'daki "new" anahtarını conv ID'li anahtara taşı
         try {
           const existing = sessionStorage.getItem(oldKey);
           if (existing) {
             sessionStorage.setItem(newKey, existing);
             sessionStorage.removeItem(oldKey);
           }
-        } catch {}
+        } catch { }
         activeThreadId.current = returnedConvId;
-        // URL'i değiştirirken sayfayı yeniden yükleme — replace ile pushState
         router.replace(`/chat?load=${returnedConvId}`, { scroll: false });
       }
 
@@ -224,15 +212,14 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, ...newMsgs]);
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "Bir hata oluştu.";
-      // Backend'den gelen teknik hata mesajlarını kullanıcı dostu hale getir
       const msg =
         raw.toLowerCase().includes("güvenlik") ||
-        raw.toLowerCase().includes("moderasyon") ||
-        raw.toLowerCase().includes("mesajınız")
+          raw.toLowerCase().includes("moderasyon") ||
+          raw.toLowerCase().includes("mesajınız")
           ? raw
           : raw.startsWith("4") || raw.startsWith("5")
-          ? "Şu an yanıt veremiyorum, lütfen tekrar dene."
-          : raw;
+            ? "Şu an yanıt veremiyorum, lütfen tekrar dene."
+            : raw;
       setMessages((prev) => [...prev, { role: "bot", text: `⚠️ ${msg}` }]);
     } finally {
       setSending(false);
@@ -244,7 +231,6 @@ export default function ChatPage() {
     sessionStorage.removeItem(storageKey(activeThreadId.current));
     activeThreadId.current = null;
     setMessages(WELCOME);
-    // URL'i temizle — yeni sohbet conversation_id olmadan başlasın
     router.replace("/chat", { scroll: false });
   }
 
@@ -274,7 +260,6 @@ export default function ChatPage() {
 
       <div className="flex flex-col flex-1 min-w-0">
 
-        {/* Üst bar — glassmorphism */}
         <header className="flex items-center justify-between px-6 py-3 border-b border-white/60 dark:border-gray-700/60 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
@@ -302,9 +287,44 @@ export default function ChatPage() {
           </div>
         </header>
 
-        {/* Mesajlar */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+
+            {/* Yeni sohbet karşılama ekranı */}
+            <AnimatePresence>
+              {messages.length <= 2 && messages.every(m => m.role === "bot") && !sending && (
+                <motion.div
+                  key="welcome-hero"
+                  className="flex flex-col items-center justify-center py-12 gap-5"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12, scale: 0.97 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <Sparkles className="w-8 h-8 text-white" />
+                  </div>
+
+                  <div className="text-center space-y-1">
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">FinShop Asistanı</h2>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">Bütçene uygun en iyi ürünleri birlikte bulalım.</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 justify-center max-w-sm">
+                    {["Babama hediye önerisi", "500₺ altı kulaklık", "En iyi akıllı saat", "Doğum günü hediyesi"].map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => send(q)}
+                        className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50 rounded-full hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <AnimatePresence initial={false}>
               {messages.map((msg, i) => {
                 if (msg.role === "user") return <UserBubble key={i} text={msg.text!} />;
@@ -320,7 +340,6 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Input — glassmorphism */}
         <div className="border-t border-white/60 dark:border-gray-700/60 px-4 py-4 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end gap-3 bg-white/80 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-400 transition-all shadow-sm">
@@ -345,7 +364,6 @@ export default function ChatPage() {
                 FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
               </p>
             </div>
-
           </div>
         </div>
       </div>
@@ -371,8 +389,8 @@ function UserBubble({ text }: { text: string }) {
 function BotBubble({ text, budgetStatus }: { text: string; budgetStatus?: string }) {
   const accent =
     budgetStatus === "healthy" ? "border-l-4 border-emerald-400 bg-emerald-50/80 dark:bg-emerald-900/20" :
-    budgetStatus === "warning"  ? "border-l-4 border-amber-400 bg-amber-50/80 dark:bg-amber-900/20" :
-    budgetStatus === "critical" ? "border-l-4 border-red-400 bg-red-50/80 dark:bg-red-900/20" : "";
+      budgetStatus === "warning" ? "border-l-4 border-amber-400 bg-amber-50/80 dark:bg-amber-900/20" :
+        budgetStatus === "critical" ? "border-l-4 border-red-400 bg-red-50/80 dark:bg-red-900/20" : "";
   return (
     <motion.div
       className="flex justify-start gap-3"
@@ -392,23 +410,94 @@ function BotBubble({ text, budgetStatus }: { text: string; budgetStatus?: string
 }
 
 function TypingIndicator() {
+  const [currentStep, setCurrentStep] = useState(0);
+  const steps = [
+    "Düşünüyor",
+    "Ürün kategorisi analiz ediliyor",
+    "Fiyat aralığı hesaplanıyor",
+    "Seçenekler getiriliyor",
+    "Sonuçlar hazırlanıyor"
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentStep((prev) => {
+        if (prev >= steps.length - 1) {
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <motion.div
-      className="flex justify-start gap-3"
+      className="flex justify-center w-full"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
-        <Sparkles className="w-3.5 h-3.5 text-white" />
-      </div>
-      <div className="bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1.5"
-        style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
-        {[0, 150, 300].map((delay, i) => (
-          <span
-            key={i}
-            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-            style={{ animationDelay: `${delay}ms` }}
-          />
+      <div className="w-full max-w-3xl px-4 py-6 space-y-2">
+        {steps.map((step, index) => (
+          <motion.div
+            key={index}
+            className="flex items-center gap-3"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{
+              opacity: index <= currentStep ? 1 : 0.3,
+              x: 0
+            }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Logo - arka plan olmadan */}
+            <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center">
+              {index < currentStep && (
+                /* Tamamlanan - yeşil checkmark */
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                >
+                  <span className="text-emerald-500 font-bold text-lg">✓</span>
+                </motion.div>
+              )}
+              {index === currentStep && (
+                /* Aktif - büyüyüp küçülen ve parlayan logo */
+                <motion.div
+                  animate={{
+                    scale: [1, 1.10, 1],
+                    opacity: [0.8, 1, 0.8],
+                    filter: [
+                      "drop-shadow(0 0 0px #3b82f6)",
+                      "drop-shadow(0 0 6px #3b82f6) drop-shadow(0 0 10px #818cf8)",
+                      "drop-shadow(0 0 0px #3b82f6)",
+                    ],
+                  }}
+                  transition={{
+                    duration: 2.8,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    times: [0, 0.5, 1],
+                  }}
+                >
+                  <Sparkles className="w-5 h-5 text-blue-500" />
+                </motion.div>
+              )}
+              {index > currentStep && (
+                /* Henüz yapılmayan - gri dot */
+                <motion.div>
+                  <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full inline-block" />
+                </motion.div>
+              )}
+            </div>
+
+            <span className={`text-sm ${index <= currentStep
+              ? "text-gray-700 dark:text-gray-300 font-medium"
+              : "text-gray-400 dark:text-gray-500"
+              }`}>
+              {step}
+            </span>
+          </motion.div>
         ))}
       </div>
     </motion.div>
@@ -450,7 +539,6 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
           </div>
         )}
 
-        {/* Bütçeye uygun alternatifler */}
         {hasAlternatives && (
           <div className="space-y-2">
             <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold px-1">
@@ -460,7 +548,6 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
           </div>
         )}
 
-        {/* Bütçeyi aşan orijinal ürünler */}
         {hasOverBudget && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1">
@@ -474,7 +561,6 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
           </div>
         )}
 
-        {/* Ne alternatif ne over_budget yoksa */}
         {!hasAlternatives && !hasOverBudget && (
           <p className="text-xs text-gray-400 font-medium px-1">Ürün bulunamadı</p>
         )}
@@ -539,7 +625,7 @@ function ProductCard({ product, overBudget }: { product: Product; overBudget?: b
         className={`flex gap-3 rounded-2xl p-3 transition-all group ${overBudget
           ? "bg-amber-50/85 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40 hover:border-amber-300/60"
           : "bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40"
-        }`}
+          }`}
         style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
         whileHover={{ y: -2 }}
         transition={{ duration: 0.15 }}
@@ -566,7 +652,6 @@ function ProductCard({ product, overBudget }: { product: Product; overBudget?: b
         </div>
       </motion.a>
 
-      {/* Yıldız butonu — kartın dışında z-index ile üstte */}
       <button
         onClick={handleStar}
         disabled={loading}
