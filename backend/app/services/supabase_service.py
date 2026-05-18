@@ -142,6 +142,21 @@ class SupabaseService:
         )
         return result.data or []
 
+    async def get_chat_history_by_conversation(
+        self, user_id: str, conversation_id: str, limit: int = 20
+    ) -> list:
+        """Belirli bir konuşmaya ait mesajları döner (conversation_id filtreli)."""
+        result = (
+            self.client.table("chat_history")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("metadata->>conversation_id", conversation_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
     async def get_conversation_starters(self, user_id: str, limit: int = 15) -> list:
         """Her sohbetin ilk user mesajını döner.
 

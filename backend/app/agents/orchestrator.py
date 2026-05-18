@@ -155,6 +155,8 @@ class OrchestratorState(TypedDict):
     recommendation: Optional[dict]
     watchlist_result: Optional[dict]  # [v2]
     chat_history: Optional[list]
+    over_budget_products: Optional[list]
+    budget_exceeded_warning: Optional[dict]
 
     error: Optional[str]
     steps_completed: list
@@ -190,14 +192,25 @@ async def node_prepare(state: OrchestratorState) -> OrchestratorState:
     """personality, budget, history — tek gather, yarı sürede."""
     t0 = time.monotonic()
     llm, db = get_services()
-    logger.info(f"[prepare] paralel fetch | user={state['user_id']}")
 
-    personality, history, budget = await asyncio.gather(
-        db.get_personality(state["user_id"]),
-        db.get_chat_history(state["user_id"], limit=5),
-        BudgetAgent(llm=llm, db=db).execute({"action": "analyze", "user_id": state["user_id"]}),
-        return_exceptions=True,
-    )
+    # chat_history zaten chat.py'de konuşmaya özgü olarak çekildiyse DB'ye gitme
+    prefetched_history = state.get("chat_history")
+    if prefetched_history is not None:
+        logger.info(f"[prepare] history pre-fetched ({len(prefetched_history)} msgs), skipping DB | user={state['user_id']}")
+        personality, budget = await asyncio.gather(
+            db.get_personality(state["user_id"]),
+            BudgetAgent(llm=llm, db=db).execute({"action": "analyze", "user_id": state["user_id"]}),
+            return_exceptions=True,
+        )
+        history = prefetched_history
+    else:
+        logger.info(f"[prepare] paralel fetch | user={state['user_id']}")
+        personality, history, budget = await asyncio.gather(
+            db.get_personality(state["user_id"]),
+            db.get_chat_history(state["user_id"], limit=5),
+            BudgetAgent(llm=llm, db=db).execute({"action": "analyze", "user_id": state["user_id"]}),
+            return_exceptions=True,
+        )
 
     if isinstance(personality, Exception):
         logger.error(f"[prepare] personality: {personality}")
@@ -285,10 +298,16 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
             "comparison_products": state.get("comparison_products", []),
         })
         elapsed = time.monotonic() - t0
-        logger.info(f"[search] found={result.get('total_found')} | {elapsed:.3f}s")
+        logger.info(
+            f"[search] found={result.get('total_found')} | "
+            f"over_budget={len(result.get('over_budget_products') or [])} | "
+            f"{elapsed:.3f}s"
+        )
         return {
             **state,
             "search": result,
+            "over_budget_products": result.get("over_budget_products") or [],
+            "budget_exceeded_warning": result.get("budget_exceeded_warning"),
             "timing": {**state.get("timing", {}), "search": round(elapsed, 3)},
             "steps_completed": state["steps_completed"] + ["search"],
         }
@@ -353,6 +372,8 @@ async def node_recommendation(state: OrchestratorState) -> OrchestratorState:
             "comparison_products": state.get("comparison_products", []),
             "occasion": gift_context.get("occasion", ""),
             "recipient": gift_context.get("recipient", ""),
+            "over_budget_products": state.get("over_budget_products") or [],
+            "budget_exceeded_warning": state.get("budget_exceeded_warning"),
         })
         elapsed = time.monotonic() - t0
         logger.info(f"[recommendation] done | {elapsed:.3f}s")
@@ -474,6 +495,7 @@ async def run_orchestrator(
     extracted_query: str = None,
     is_comparison: bool = False,
     comparison_products: list = None,
+    chat_history: list = None,
 ) -> dict:
     """Chat endpoint'inden çağrılır. ConversationAgent'tan gelen intent bilgisini kullanır."""
     t_total = time.monotonic()
@@ -490,7 +512,11 @@ async def run_orchestrator(
         "comparison_products": comparison_products or [],
         "personality": None, "budget": None, "search": None,
         "reviews": None, "recommendation": None, "watchlist_result": None,
-        "chat_history": None, "error": None,
+        # Önceden çekilen konuşmaya özgü geçmiş varsa kullan, yoksa node_prepare çeker
+        "chat_history": chat_history if chat_history is not None else None,
+        "over_budget_products": None,
+        "budget_exceeded_warning": None,
+        "error": None,
         "steps_completed": [], "timing": {},
     }
 
@@ -517,14 +543,16 @@ async def run_orchestrator(
             rec["winner"]["reasoning_for_user"] = clean_user_text(rec["winner"]["reasoning_for_user"])
 
     return {
-        "message":          message,
-        "intent":           final_state.get("intent"),
-        "steps_completed":  final_state["steps_completed"],
-        "timing":           final_state.get("timing", {}),
-        "personality":      final_state.get("personality"),
-        "budget_status":    (final_state.get("budget") or {}).get("status"),
-        "products":         final_state.get("reviews") or [],
-        "recommendation":   rec,
-        "watchlist_result": final_state.get("watchlist_result"),
-        "error":            final_state.get("error"),
+        "message":               message,
+        "intent":                final_state.get("intent"),
+        "steps_completed":       final_state["steps_completed"],
+        "timing":                final_state.get("timing", {}),
+        "personality":           final_state.get("personality"),
+        "budget_status":         (final_state.get("budget") or {}).get("status"),
+        "products":              final_state.get("reviews") or [],
+        "recommendation":        rec,
+        "watchlist_result":      final_state.get("watchlist_result"),
+        "over_budget_products":  final_state.get("over_budget_products") or [],
+        "budget_exceeded_warning": final_state.get("budget_exceeded_warning"),
+        "error":                 final_state.get("error"),
     }

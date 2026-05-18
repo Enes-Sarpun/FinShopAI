@@ -71,6 +71,8 @@ export interface Product {
   image_url: string;
   recommendation_reason: string;
   serpapi_product_id?: string;
+  over_budget?: boolean;
+  budget_alternative?: boolean;
   review_analysis?: {
     review_count: number;
     reviews: Review[];
@@ -98,6 +100,12 @@ export interface Recommendation {
   top_products: Product[];
 }
 
+export interface BudgetExceededWarning {
+  requested_query: string;
+  min_found_price: number;
+  user_budget: number;
+}
+
 export interface ChatResponse {
   message: string;
   is_product_request: boolean;
@@ -111,6 +119,8 @@ export interface ChatResponse {
   affordability_message: string | null;
   user_msg_id?: string | null;
   conversation_id?: string | null;
+  over_budget_products?: Product[];
+  budget_exceeded_warning?: BudgetExceededWarning | null;
 }
 
 export interface ChatHistory {

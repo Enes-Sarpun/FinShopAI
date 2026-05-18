@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     # SerpAPI
     SERPAPI_KEY: str = ""
 
+    # Manus API
+    MANUS_API_KEY: str = ""
+    MANUS_BASE_URL: str = "https://api.manus.im"
+    MANUS_TIMEOUT: int = 60
+    MANUS_MAX_RETRIES: int = 2
+
+    # LLM Routing
+    ENABLE_MANUS: bool = False
+    MANUS_ROLLOUT_PERCENTAGE: int = 0
+
     # OpenAI (backup)
     OPENAI_API_KEY: str = ""
 

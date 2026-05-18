@@ -30,6 +30,7 @@ import json
 import random
 from app.agents.base_agent import BaseAgent
 from app.prompts.conversation_prompts import (
+    CONVERSATION_SYSTEM_PROMPT,
     INTENT_SYSTEM,
     INTENT_CLASSIFICATION_PROMPT,
     QUICK_REPLIES,
@@ -37,79 +38,20 @@ from app.prompts.conversation_prompts import (
     COMPLAINT_REPLY_PROMPT,
 )
 
-# ── Ürün anahtar kelimeleri (hızlı kontrol için) ───────────────────────────
-PRODUCT_KEYWORDS = [
-    "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
-    "ucuz", "fiyat", "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
-    "kamera", "tablet", "saat", "ayakkabı", "giysi", "kitap", "oyun",
-    "tl", "lira", "bütçe", "indirim", "kampanya", "sipariş", "iade",
-    "monitor", "klavye", "mouse", "mikrodalga", "çamaşır", "bulaşık",
-    "tv", "televizyon", "koltuk", "masa", "sandalye", "yastık", "battaniye",
-    "parfüm", "kozmetik", "makyaj", "bisiklet", "spor", "koşu", "fitness",
-    "çanta", "cüzdan", "gözlük", "bileklik", "kolye", "yüzük",
-]
-
-COMPARISON_KEYWORDS = [
-    "mı alsam", "mi alsam", "karşılaştır", "farkı ne", "hangisi daha",
-    "hangisini", "arasında", "vs ", " vs", "veya", "yoksa", "mı yoksa",
-    "mi yoksa", "mu yoksa", "mü yoksa",
-]
-
+# Hızlı yol için sadece selamlama kelimeleri (LLM çağrısı yapılmaz)
 GREETING_WORDS = {
     "merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar",
     "hey", "hi", "hello", "naber", "nasılsın", "nasıl gidiyor",
 }
 
-CHITCHAT_WORDS = {
-    "teşekkür", "teşekkürler", "sağol", "sağ ol", "tamam", "ok", "okay",
-    "evet", "hayır", "güzel", "süper", "harika", "iyi", "kötü", "anladım",
-    "peki", "tabi", "tabii", "neden", "niçin", "niye", "nasıl",
-}
-
-# ── v3: Takip mesajı anahtar kelimeleri ─────────────────────────────────────
-REFINEMENT_KEYWORDS = [
-    # Cinsiyet / kişi düzeltmeleri
-    "erkeğim", "kadınım", "erkek", "kadın", "kız", "oğlan", "bay", "bayan",
-    # Fiyat düzeltmeleri
-    "daha ucuz", "daha pahalı", "daha uygun", "bütçem",
-    # Tercih düzeltmeleri
-    "başka", "farklı", "benzer", "alternatif", "başka bir",
-    # Beğenmeme
-    "beğenmedim", "olmaz", "istemem", "sevmedim", "hoşuma gitmedi",
-    # Detay ekleme
-    "ama ", "fakat", "ancak", "aslında",
-    # Fiziksel özellikler
-    "yaşında", "beden", "numara", "renk", "boyut",
-    # Daha fazla bilgi
-    "daha büyük", "daha küçük", "daha hafif", "daha kaliteli",
+# Fallback keyword listesi — sadece LLM hata verirse kullanılır
+PRODUCT_KEYWORDS = [
+    "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
+    "ucuz", "fiyat", "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
+    "tablet", "saat", "ayakkabı", "tv", "televizyon", "parfüm",
+    "iphone", "samsung", "xiaomi", "apple", "nasıl olur", "ne olur",
+    "peki", "ya", "başka", "farklı", "alternatif",
 ]
-
-# ── v3: Ürün sonrası bağlamsal yanıtlar ─────────────────────────────────────
-CONTEXTUAL_REPLIES = {
-    "tesekkur": [
-        "Rica ederim! 😊 Ürünlerden beğendiğin oldu mu?",
-        "Ne demek! Beğendiğin bir şey varsa detay sorabilirssin.",
-        "Rica ederim! Başka bir ürün aramamı ister misin?",
-    ],
-    "evet": [
-        "Harika! Ürünlerden birini takip listene eklememi ister misin? ⭐",
-        "Süper! Detayını görmek istediğin bir ürün var mı?",
-    ],
-    "hayir": [
-        "Anladım! Farklı ürünler görmek ister misin? Ne tarz bir şey arıyorsun?",
-        "Tamam! Başka kriterlere göre arayalım mı?",
-    ],
-    "guzel": [
-        "Sevindim! 😊 Bir tanesini watchlist'e ekleyeyim mi?",
-        "Güzel! Başka bir şey aramamı ister misin?",
-    ],
-}
-
-
-def _is_single_emoji(text: str) -> bool:
-    stripped = text.strip()
-    return len(stripped) <= 3 and not stripped.isascii()
-
 
 def _coerce_metadata(meta) -> dict:
     """
@@ -166,74 +108,9 @@ def _has_gender_hint(message: str) -> str | None:
     return None
 
 
-def _quick_intent(message: str) -> str | None:
-    """
-    LLM çağrısı yapmadan hızlı intent tespiti.
-    Belirsiz durumlarda None döner → LLM'e gönderilir.
-    """
-    lower = message.lower().strip()
-
-    if _is_single_emoji(message):
-        return "CHITCHAT"
-
-    # Karşılaştırma kontrolü (product keywords'ten önce)
-    if any(kw in lower for kw in COMPARISON_KEYWORDS):
-        return "COMPARISON"
-
-    # Selamlama (kısa mesajlarda)
-    if len(lower) <= 25 and any(lower.startswith(g) or lower == g for g in GREETING_WORDS):
-        return "GREETING"
-
-    # Teşekkür her uzunlukta CHITCHAT olarak yakalansın (önceden 20 char limiti
-    # vardı; "çok teşekkür ederim yardımın için" gibi mesajlar LLM'e gidiyordu)
-    if any(w in lower for w in ["teşekkür", "sağ ol", "sağol", "eyvallah"]):
-        return "CHITCHAT"
-
-    # Chitchat (kısa + bilinen kelimeler)
-    if len(lower) <= 20 and any(cw in lower for cw in CHITCHAT_WORDS):
-        return "CHITCHAT"
-
-    # Ürün arama
-    if any(kw in lower for kw in PRODUCT_KEYWORDS):
-        return "PRODUCT_SEARCH"
-
-    # Uzun mesaj → LLM'e bırak
-    return None
-
-
-def _get_quick_reply(intent: str, message: str) -> str:
-    """LLM çağırmadan anında yanıt üret."""
-    lower = message.lower()
-
-    if intent == "GREETING":
-        return random.choice(QUICK_REPLIES["selamlama"])
-
-    if intent == "CHITCHAT":
-        if any(w in lower for w in ["teşekkür", "sağol", "sağ ol"]):
-            return random.choice(QUICK_REPLIES["tesekkur"])
-        if lower.strip() in {"evet", "e", "ok", "okay", "tabi", "tabii"}:
-            return random.choice(QUICK_REPLIES["evet"])
-        if lower.strip() in {"hayır", "h", "yok"}:
-            return random.choice(QUICK_REPLIES["hayir"])
-        if lower.strip() in {"güzel", "süper", "harika", "iyi"}:
-            return random.choice(QUICK_REPLIES["guzel"])
-        return "Anlıyorum 😊 Başka bir konuda yardımcı olabilir miyim?"
-
-    return "Başka bir konuda yardımcı olabilir miyim?"
-
-
-def _get_contextual_reply(message: str) -> str:
-    """Ürün önerisi sonrası bağlamsal yanıt üret."""
-    lower = message.lower()
-    if any(w in lower for w in ["teşekkür", "sağol", "sağ ol"]):
-        return random.choice(CONTEXTUAL_REPLIES["tesekkur"])
-    if lower.strip() in {"evet", "e", "ok", "okay", "tabi", "tabii"}:
-        return random.choice(CONTEXTUAL_REPLIES["evet"])
-    if lower.strip() in {"hayır", "h", "yok"}:
-        return random.choice(CONTEXTUAL_REPLIES["hayir"])
-    if lower.strip() in {"güzel", "süper", "harika", "iyi"}:
-        return random.choice(CONTEXTUAL_REPLIES["guzel"])
-    return random.choice(CONTEXTUAL_REPLIES["tesekkur"])
+def _get_greeting_reply(message: str) -> str:
+    """Selamlama için hızlı yanıt — LLM çağrısı yok."""
+    return random.choice(QUICK_REPLIES["selamlama"])
 
 
 class ConversationAgent(BaseAgent):
@@ -254,70 +131,45 @@ class ConversationAgent(BaseAgent):
         t0 = time.monotonic()
         message = input_data.get("message", "").strip()
         history = input_data.get("chat_history", [])
-        budget_info = input_data.get("budget_info")  # Opsiyonel
+        budget_info = input_data.get("budget_info")
 
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
 
-        # ── 0. Son ürün bağlamını kontrol et ──────────────────────────
+        # ── 1. Sadece açık selamlama → hızlı yol (LLM çağrısı yok) ──────
+        lower = message.lower().strip()
+        if len(lower) <= 35 and any(lower.startswith(g) or lower == g for g in GREETING_WORDS):
+            elapsed = (time.monotonic() - t0) * 1000
+            self.logger.info(f"[conv] quick=GREETING | {elapsed:.0f}ms")
+            return self._build_result("GREETING", 0.99, _get_greeting_reply(message))
+
+        # ── 2. Her şeyi LLM'e gönder ─────────────────────────────────────
         product_context = self._get_product_context(history)
         has_recent_products = product_context is not None
+        prev_query = (product_context or {}).get("user_query", "") or ""
+        product_names = (product_context or {}).get("product_names", [])
+
         self.logger.info(
-            f"[conv] context_check | has_recent_products={has_recent_products} "
-            f"history_len={len(history)} prev_query="
-            f"'{(product_context or {}).get('user_query', '')}'"
+            f"[conv] llm_classify | has_products={has_recent_products} "
+            f"prev_query='{prev_query[:40]}' history_len={len(history)}"
         )
 
-        # ── 0.5 Takip mesajı (FOLLOW-UP) ön-yakalama ─────────────────
-        # Bu kontrol quick_intent'ten ÖNCE yapılır çünkü "ben erkeğim" gibi
-        # mesajlar quick_intent'te None döner ama LLM bunları CHITCHAT olarak
-        # işaretleyip "nasıl yardımcı olabilirim?" diyebiliyor. Ürün bağlamı
-        # varsa direkt refinement olarak işle, LLM çağırma.
-        if has_recent_products and self._is_refinement_message(message):
-            prev_query = product_context.get("user_query", "") or ""
-            refined_query = self._build_refined_query(prev_query, message)
-            elapsed = (time.monotonic() - t0) * 1000
-            self.logger.info(
-                f"[conv] FOLLOW_UP detected (pre-quick) | prev='{prev_query}' + "
-                f"new='{message}' → refined='{refined_query}' | {elapsed:.0f}ms"
-            )
-            return self._build_result(
-                "PRODUCT_SEARCH", 0.9, None,
-                extracted_query=refined_query,
-            )
-
-        # ── 1. Hızlı kural tabanlı intent tespiti ────────────────────────
-        quick_intent = _quick_intent(message)
-
-        if quick_intent in ("GREETING", "CHITCHAT"):
-            if has_recent_products:
-                # Ürün önerisi sonrası bağlamsal yanıt ver
-                # Örn: "Teşekkürler" → "Rica ederim! Ürünlerden beğendiğin oldu mu?"
-                reply = _get_contextual_reply(message)
-                elapsed = (time.monotonic() - t0) * 1000
-                self.logger.info(
-                    f"[conv] quick={quick_intent} + product_context → contextual reply | {elapsed:.0f}ms"
-                )
-                return self._build_result(quick_intent, 0.95, reply)
-            else:
-                reply = _get_quick_reply(quick_intent, message)
-                elapsed = (time.monotonic() - t0) * 1000
-                self.logger.info(f"[conv] quick={quick_intent} | {elapsed:.0f}ms")
-                return self._build_result(quick_intent, 0.95, reply)
-
-        if quick_intent == "PRODUCT_SEARCH":
-            # Ürün isteği kesin, LLM çağırma
-            elapsed = (time.monotonic() - t0) * 1000
-            self.logger.info(f"[conv] quick=PRODUCT_SEARCH | {elapsed:.0f}ms")
-            return self._build_result("PRODUCT_SEARCH", 0.9, None,
-                                      extracted_query=message)
-
-        # ── 2. LLM ile intent sınıflandırma ──────────────────────────────
         try:
             history_text = self._format_history(history, limit=8)
-            prompt = INTENT_CLASSIFICATION_PROMPT.format(
-                history_text=history_text or "(geçmiş yok)",
-                message=message,
+            context_block = ""
+            if has_recent_products:
+                names_str = ", ".join(product_names[:3]) if product_names else "—"
+                context_block = (
+                    f"\nÖnceki arama sorgusu: \"{prev_query}\"\n"
+                    f"Önerilen ürünler: {names_str}"
+                )
+            # .format() yerine manuel replace — prev_query/product_names içinde
+            # süslü parantez { } olursa format() KeyError fırlatır.
+            prompt = (
+                INTENT_CLASSIFICATION_PROMPT
+                .replace("{history_text}", history_text or "(geçmiş yok)")
+                .replace("{context_block}", context_block)
+                .replace("{message}", message)
             )
             result = await self.call_llm_json(prompt, system=INTENT_SYSTEM)
 
@@ -330,37 +182,26 @@ class ConversationAgent(BaseAgent):
             # Güven düşükse CHITCHAT'e düşür
             if confidence < 0.45 and intent in ("PRODUCT_SEARCH", "COMPARISON"):
                 intent = "CHITCHAT"
-                reply = "Tam anlayamadım 😅 Ürün mü arıyorsunuz, yoksa başka bir konuda yardım mı istersiniz?"
+                reply = "Tam anlayamadım 😅 Ürün mü arıyorsun, yoksa başka bir konuda yardım mı istersin?"
 
-            # v3: LLM CHITCHAT dedi ama ürün bağlamı varsa → her zaman contextual reply ver
-            # (LLM jenerik "nasıl yardımcı olabilirim?" dese bile bağlamlı yanıtla override)
-            if intent in ("CHITCHAT", "GREETING") and has_recent_products:
-                reply = _get_contextual_reply(message)
-                self.logger.info(
-                    f"[conv] llm={intent} but product_context → contextual reply override"
-                )
-
-            # v3: LLM PRODUCT_SEARCH dedi + ürün bağlamı + extracted_query çok kısa/eksik
-            # → önceki sorguyla birleştir (örn: kullanıcı 'ben erkeğim' dedi, LLM bunu
-            # PRODUCT_SEARCH olarak işaretledi ama query'i eksik üretti)
+            # PRODUCT_SEARCH + extracted_query kısa/boş + önceki sorgu varsa → birleştir
             if (
                 intent == "PRODUCT_SEARCH"
                 and has_recent_products
+                and prev_query
                 and (not extracted_query or len(extracted_query.split()) <= 2)
             ):
-                prev_query = product_context.get("user_query", "") or ""
-                if prev_query:
-                    refined = self._build_refined_query(prev_query, message)
-                    self.logger.info(
-                        f"[conv] llm=PRODUCT_SEARCH + thin query → refined "
-                        f"'{extracted_query}' → '{refined}'"
-                    )
-                    extracted_query = refined
+                refined = self._build_refined_query(prev_query, message)
+                self.logger.info(
+                    f"[conv] thin query → refined '{extracted_query}' → '{refined}'"
+                )
+                extracted_query = refined
 
         except Exception as e:
             self.logger.error(f"[conv] LLM error: {e}")
-            # Fallback: keyword'e göre tahmin
-            intent = "PRODUCT_SEARCH" if quick_intent == "PRODUCT_SEARCH" else "CHITCHAT"
+            # Fallback: keyword varlığına göre tahmin
+            has_product_kw = any(kw in lower for kw in PRODUCT_KEYWORDS)
+            intent = "PRODUCT_SEARCH" if has_product_kw else "CHITCHAT"
             confidence = 0.6
             reply = None if intent == "PRODUCT_SEARCH" else "Anlıyorum! Nasıl yardımcı olabilirim?"
             comparison_products = []
@@ -373,18 +214,18 @@ class ConversationAgent(BaseAgent):
                     budget_info=str(budget_info),
                     message=message,
                 )
-                reply = await self.call_llm(budget_prompt)
+                reply = await self.call_llm(budget_prompt, system=CONVERSATION_SYSTEM_PROMPT)
             except Exception:
-                reply = "Bütçe bilgilerinize şu an ulaşamıyorum. Daha sonra tekrar deneyin."
+                reply = "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
 
         # ── 4. COMPLAINT özel işlemi ──────────────────────────────────────
         if intent == "COMPLAINT":
             if not reply:
                 try:
                     complaint_prompt = COMPLAINT_REPLY_PROMPT.format(message=message)
-                    reply = await self.call_llm(complaint_prompt)
+                    reply = await self.call_llm(complaint_prompt, system=CONVERSATION_SYSTEM_PROMPT)
                 except Exception:
-                    reply = "Üzgünüm, yaşadığınız sorun için özür dilerim 🙏 Farklı bir arama yapmamı ister misiniz?"
+                    reply = "Üzgünüm, yaşadığın sorun için özür dilerim 🙏 Farklı bir arama deneyelim mi?"
 
         elapsed = (time.monotonic() - t0) * 1000
         self.logger.info(
@@ -445,40 +286,6 @@ class ConversationAgent(BaseAgent):
                 "product_count": len(products),
             }
         return None
-
-    def _is_refinement_message(self, message: str) -> bool:
-        """Mesajın bir önceki ürün aramasını rafine eden bir takip mesajı olup olmadığını kontrol et."""
-        lower = message.lower().strip()
-        tokens = _tokenize(message)
-
-        # Cinsiyet bildirimi → kesin refinement
-        if _has_gender_hint(message):
-            return True
-
-        # Kelime-tabanlı refinement (substring değil, böylece 'erkek' 'erken'i yakalamaz)
-        word_kws = {"başka", "farklı", "benzer", "alternatif", "beğenmedim",
-                    "olmaz", "istemem", "sevmedim", "beden", "numara", "renk",
-                    "boyut", "yaşında", "bütçem", "ucuz", "pahalı"}
-        if tokens & word_kws:
-            return True
-
-        # Çok-kelimeli (substring uygun olan) refinement kalıpları
-        phrase_kws = [
-            "daha ucuz", "daha pahalı", "daha uygun", "daha kaliteli",
-            "daha büyük", "daha küçük", "daha hafif", "hoşuma gitmedi",
-            "başka bir", "ama ", "fakat", "ancak", "aslında",
-        ]
-        if any(p in lower for p in phrase_kws):
-            return True
-
-        # Kısa mesajlar + ürün bağlamı varsa muhtemelen follow-up
-        # "Siyah olsun", "42 numara", "Samsung olmasın" gibi
-        if len(lower) <= 60 and not any(kw in lower for kw in PRODUCT_KEYWORDS):
-            word_count = len(lower.split())
-            if word_count <= 8:
-                return True
-
-        return False
 
     def _strip_product_search_prefixes(self, query: str) -> str:
         """'pantolon öner', 'pantolon arıyorum' → 'pantolon' gibi sadeleştir."""

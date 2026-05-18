@@ -52,8 +52,15 @@ JSON formatında döndür:
     "recipient": "baba/anne/eş/sevgili/çocuk/arkadaş/iş_arkadaşı/öğretmen veya null",
     "recipient_age_group": "çocuk/genç/yetişkin/yaşlı veya null",
     "inferred_categories": ["mücevher", "kişisel_bakım", "ev_dekorasyon"],
-    "needs_clarification": false
+    "needs_clarification": false,
+    "is_specific_product": false
 }}
+
+is_specific_product: Kullanıcı spesifik bir marka+model istedi mi?
+- true örnekler: "iPhone 15", "Samsung Galaxy S24", "MacBook Pro M3", "Nike Air Max 90",
+  "Dyson V15", "Sony WH-1000XM5" — model numarası veya çok spesifik ürün adı var
+- false örnekler: "bütçeme uygun iPhone", "ucuz Samsung telefon", "Apple telefon öner",
+  "iPhone almak istiyorum" — sadece marka/kategori, spesifik model yok
 
 SADECE JSON DÖNDÜR, BAŞKA AÇIKLAMA YAPMA.
 """

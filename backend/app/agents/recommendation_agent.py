@@ -246,14 +246,42 @@ class RecommendationAgent(BaseAgent):
         # Gift context
         occasion = input_data.get("occasion") or ""
         recipient = input_data.get("recipient") or ""
+        over_budget_products = input_data.get("over_budget_products") or []
+        budget_exceeded_warning = input_data.get("budget_exceeded_warning")
 
         self.logger.info(
             f"Öneri üretiliyor | intent={intent} | ürün_sayısı={len(products)} "
-            f"| occasion={occasion} | recipient={recipient}"
+            f"| occasion={occasion} | recipient={recipient} "
+            f"| over_budget={len(over_budget_products)}"
         )
 
-        if not products:
+        if not products and not over_budget_products:
             return self._empty_result("Önerilecek ürün bulunamadı.")
+
+        # Sadece over_budget ürünler varsa (bütçeye uygun alternatif bulunamadı)
+        if not products and over_budget_products and budget_exceeded_warning:
+            req_query = budget_exceeded_warning.get("requested_query", "")
+            min_price = budget_exceeded_warning.get("min_found_price", 0)
+            user_bgt  = budget_exceeded_warning.get("user_budget", 0)
+            summary = (
+                f"**{req_query}** bütçeni aşıyor (~{min_price:,} TL, bütçen ~{user_bgt:,} TL). "
+                f"Şu an bütçene uygun bir seçenek bulamadım, ama bütçeyi aşan ürünleri yine de gösterdim."
+            )
+            return {
+                "mode": "recommendation",
+                "spending_type": personality.get("spending_type", "dengeli"),
+                "budget_status": budget.get("status", "unknown"),
+                "occasion": occasion,
+                "recipient": recipient,
+                "top_pick": None,
+                "summary": summary,
+                "financial_advice": "",
+                "budget_warning": True,
+                "budget_warning_data": budget_exceeded_warning,
+                "over_budget_products": over_budget_products,
+                "top_products": [],
+                "winner": None,
+            }
 
         # Finansal metrikler
         spending_type = personality.get("spending_type", "dengeli")
@@ -327,6 +355,19 @@ class RecommendationAgent(BaseAgent):
         if financial_advice and any(w in financial_advice.lower() for w in ["savruk", "profil", "spending", "affordability"]):
             financial_advice = ""
 
+        # Bütçe aşımı durumunda: kullanıcıya bilgi ver + alternatiflerin üzerine not ekle
+        budget_warning_data = None
+        if budget_exceeded_warning:
+            req_query  = budget_exceeded_warning.get("requested_query", "")
+            min_price  = budget_exceeded_warning.get("min_found_price", 0)
+            user_bgt   = budget_exceeded_warning.get("user_budget", 0)
+            summary = (
+                f"**{req_query}** şu an bütçeni aşıyor "
+                f"(~{min_price:,} TL, bütçen ~{user_bgt:,} TL). "
+                f"Sana aynı markadan bütçene daha uygun seçenekler getirdim 👇"
+            )
+            budget_warning_data = budget_exceeded_warning
+
         return {
             "mode": "recommendation",
             "spending_type": spending_type,
@@ -336,8 +377,10 @@ class RecommendationAgent(BaseAgent):
             "top_pick": llm_result.get("top_pick"),
             "summary": summary,
             "financial_advice": financial_advice,
-            "budget_warning": llm_result.get("budget_warning", False),
+            "budget_warning": bool(budget_exceeded_warning) or llm_result.get("budget_warning", False),
+            "budget_warning_data": budget_warning_data,
             "top_products": ranked_products,
+            "over_budget_products": over_budget_products,
             "winner": winner_data,
         }
 
@@ -547,5 +590,7 @@ class RecommendationAgent(BaseAgent):
             "summary": message,
             "financial_advice": "",
             "budget_warning": False,
+            "budget_warning_data": None,
+            "over_budget_products": [],
             "top_products": [],
         }

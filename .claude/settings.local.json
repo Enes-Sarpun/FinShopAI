@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile app/agents/conversation_agent.py)",
+      "Bash(python -m py_compile app/prompts/conversation_prompts.py)"
+    ]
+  }
+}

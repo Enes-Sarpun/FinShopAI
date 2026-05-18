@@ -51,7 +51,15 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             if sec_result.get("clean_content"):
                 body = ChatRequest(message=sec_result["clean_content"], conversation_id=incoming_conversation_id)
 
-        history = await db.get_chat_history(user_id, limit=6)
+        # Mevcut konuşmaya ait geçmişi getir.
+        # Yeni sohbette (conversation_id yok) boş başla — önceki sohbetlerin
+        # bağlamı sızmasın (örn. eski ürün önerisinin "contextual reply" tetiklemesi).
+        if incoming_conversation_id:
+            history = await db.get_chat_history_by_conversation(
+                user_id, incoming_conversation_id, limit=12
+            )
+        else:
+            history = []
 
         conv_agent = ConversationAgent(llm=llm, db=db)
         conv_result = await conv_agent.execute({
@@ -140,6 +148,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             extracted_query=conv_result.get("extracted_query"),
             is_comparison=conv_result.get("is_comparison", False),
             comparison_products=conv_result.get("comparison_products", []),
+            chat_history=history,
         )
 
         intent      = result.get("intent", "product_search")
@@ -203,25 +212,39 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "critical": "Bütçen kritik seviyede, bu alışverişi ertelemeyi düşün.",
             }.get(budget_data)
 
+        over_budget_products = result.get("over_budget_products") or []
+        budget_exceeded_warning = result.get("budget_exceeded_warning")
+        rec = result.get("recommendation") or {}
+
         assistant_payload = {
             "affordability_message": affordability_message,
-            "summary": (result.get("recommendation") or {}).get("summary"),
-            "financial_advice": (result.get("recommendation") or {}).get("financial_advice"),
-            "top_pick": (result.get("recommendation") or {}).get("top_pick"),
+            "summary": rec.get("summary"),
+            "financial_advice": rec.get("financial_advice"),
+            "top_pick": rec.get("top_pick"),
             "products": result.get("products", []),
             "budget_status": budget_data,
+            "over_budget_products": over_budget_products,
+            "budget_exceeded_warning": budget_exceeded_warning,
         }
+
+        product_count = len(result.get("products", []))
+        msg_label = (
+            f"[{product_count} alternatif + {len(over_budget_products)} bütçe üstü ürün]"
+            if over_budget_products
+            else f"[{product_count} ürün bulundu]"
+        )
 
         await db.save_chat({
             "user_id": user_id,
-            "message": f"[{len(result.get('products', []))} ürün bulundu]",
+            "message": msg_label,
             "role": "assistant", "agent_used": "orchestrator",
             "metadata": {
                 "type": "products", "user_msg_id": user_msg_id,
                 "conversation_id": conversation_id,
                 "payload": assistant_payload,
-                "product_count": len(result.get("products", [])),
+                "product_count": product_count,
                 "budget_status": budget_data,
+                "budget_exceeded_warning": budget_exceeded_warning,
                 "intent": intent,
                 "timing": result.get("timing", {}),
             },
@@ -233,6 +256,8 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             "user_msg_id": user_msg_id,
             "conversation_id": conversation_id,
             "affordability_message": affordability_message,
+            "over_budget_products": over_budget_products,
+            "budget_exceeded_warning": budget_exceeded_warning,
         }
 
     except Exception as e:

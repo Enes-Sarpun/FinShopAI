@@ -21,6 +21,7 @@ interface Msg {
   role: MsgRole;
   text?: string;
   products?: Product[];
+  overBudgetProducts?: Product[];
   topPick?: { product_name: string; reason: string; value_score: number } | null;
   advice?: string;
   budgetStatus?: string;
@@ -104,12 +105,15 @@ export default function ChatPage() {
                 financial_advice?: string;
                 top_pick?: { product_name: string; reason: string; value_score: number } | null;
                 products?: Product[];
+                over_budget_products?: Product[];
                 budget_status?: string;
               };
               if (payload?.summary)
                 restored.push({ role: "bot", text: payload.summary, budgetStatus: payload.budget_status });
-              if (payload?.products?.length)
-                restored.push({ role: "products", products: payload.products, topPick: payload.top_pick ?? null, advice: payload.financial_advice ?? undefined });
+              const hasP = (payload?.products?.length ?? 0) > 0;
+              const hasOB = (payload?.over_budget_products?.length ?? 0) > 0;
+              if (hasP || hasOB)
+                restored.push({ role: "products", products: payload?.products ?? [], overBudgetProducts: payload?.over_budget_products ?? [], topPick: payload?.top_pick ?? null, advice: payload?.financial_advice ?? undefined });
             } else {
               if (msg.message) restored.push({ role: "bot", text: msg.message });
             }
@@ -200,8 +204,18 @@ export default function ChatPage() {
       const newMsgs: Msg[] = [];
       if (data.recommendation?.summary)
         newMsgs.push({ role: "bot", text: data.recommendation.summary, budgetStatus: data.budget_status });
-      if (data.products?.length > 0) {
-        newMsgs.push({ role: "products", products: data.products, topPick: data.recommendation?.top_pick ?? null, advice: data.recommendation?.financial_advice ?? undefined });
+
+      const hasProducts = (data.products?.length ?? 0) > 0;
+      const hasOverBudget = (data.over_budget_products?.length ?? 0) > 0;
+
+      if (hasProducts || hasOverBudget) {
+        newMsgs.push({
+          role: "products",
+          products: data.products ?? [],
+          overBudgetProducts: data.over_budget_products ?? [],
+          topPick: data.recommendation?.top_pick ?? null,
+          advice: data.recommendation?.financial_advice ?? undefined,
+        });
       } else {
         newMsgs.push({ role: "bot", text: "Ürün bulunamadı, farklı bir arama deneyin." });
       }
@@ -225,8 +239,11 @@ export default function ChatPage() {
   }
 
   function clearChat() {
-    setMessages(WELCOME);
     sessionStorage.removeItem(storageKey(activeThreadId.current));
+    activeThreadId.current = null;
+    setMessages(WELCOME);
+    // URL'i temizle — yeni sohbet conversation_id olmadan başlasın
+    router.replace("/chat", { scroll: false });
   }
 
   async function deleteHistory() {
@@ -291,7 +308,7 @@ export default function ChatPage() {
                 if (msg.role === "user") return <UserBubble key={i} text={msg.text!} />;
                 if (msg.role === "bot") return <BotBubble key={i} text={msg.text!} budgetStatus={msg.budgetStatus} />;
                 if (msg.role === "products") return (
-                  <ProductsMessage key={i} products={msg.products!} topPick={msg.topPick} advice={msg.advice} />
+                  <ProductsMessage key={i} products={msg.products!} overBudgetProducts={msg.overBudgetProducts ?? []} topPick={msg.topPick} advice={msg.advice} />
                 );
                 return null;
               })}
@@ -396,11 +413,15 @@ function TypingIndicator() {
   );
 }
 
-function ProductsMessage({ products, topPick, advice }: {
+function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
   products: Product[];
+  overBudgetProducts?: Product[];
   topPick?: { product_name: string; reason: string; value_score: number } | null;
   advice?: string;
 }) {
+  const hasAlternatives = products.length > 0;
+  const hasOverBudget = (overBudgetProducts?.length ?? 0) > 0;
+
   return (
     <motion.div
       className="flex justify-start gap-3"
@@ -426,16 +447,41 @@ function ProductsMessage({ products, topPick, advice }: {
             <p className="text-xs text-blue-500 mt-1 font-numeric">Değer puanı: {topPick.value_score}/10</p>
           </div>
         )}
-        <div className="space-y-2">
-          <p className="text-xs text-gray-400 font-medium px-1">{products.length} ürün bulundu</p>
-          {products.map((product, i) => <ProductCard key={i} product={product} />)}
-        </div>
+
+        {/* Bütçeye uygun alternatifler */}
+        {hasAlternatives && (
+          <div className="space-y-2">
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold px-1">
+              ✓ Bütçene uygun seçenekler ({products.length})
+            </p>
+            {products.map((product, i) => <ProductCard key={i} product={product} />)}
+          </div>
+        )}
+
+        {/* Bütçeyi aşan orijinal ürünler */}
+        {hasOverBudget && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                ⚠️ Bütçeni aşan ürünler ({overBudgetProducts!.length})
+              </span>
+            </div>
+            {overBudgetProducts!.map((product, i) => (
+              <ProductCard key={`ob-${i}`} product={product} overBudget />
+            ))}
+          </div>
+        )}
+
+        {/* Ne alternatif ne over_budget yoksa */}
+        {!hasAlternatives && !hasOverBudget && (
+          <p className="text-xs text-gray-400 font-medium px-1">Ürün bulunamadı</p>
+        )}
       </div>
     </motion.div>
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, overBudget }: { product: Product; overBudget?: boolean }) {
   const [starred, setStarred] = useState(false);
   const [popping, setPopping] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -479,11 +525,19 @@ function ProductCard({ product }: { product: Product }) {
 
   return (
     <div className="relative">
+      {overBudget && (
+        <div className="absolute -top-1.5 left-3 z-10 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+          Bütçeni Aşıyor
+        </div>
+      )}
       <motion.a
         href={product.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex gap-3 bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl p-3 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40 transition-all group"
+        className={`flex gap-3 rounded-2xl p-3 transition-all group ${overBudget
+          ? "bg-amber-50/85 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40 hover:border-amber-300/60"
+          : "bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40"
+        }`}
         style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
         whileHover={{ y: -2 }}
         transition={{ duration: 0.15 }}

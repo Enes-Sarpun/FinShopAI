@@ -1,15 +1,20 @@
 """
-Search Agent — Geliştirilmiş Sürüm
+Search Agent — v4 (Paralel Manus + SerpAPI)
 =====================================
 Değişiklikler:
   - Ürün deduplikasyonu (isim benzerliği > 80%)
   - Karşılaştırma modu desteği (is_comparison flag)
   - Daha fazla satıcı URL mapping
   - Fiyat parse iyileştirmesi (TL, ₺, virgül/nokta)
-  - Senkron SerpAPI çağrısı hatasız asyncio.to_thread ile sarılı (zaten vardı)
+  - Senkron SerpAPI çağrısı hatasız asyncio.to_thread ile sarılı
+  v4:
+  - ENABLE_MANUS=true ise Manus + SerpAPI paralel çalışır
+  - Sonuçlar birleştirilir, duplikatlar temizlenir
+  - Manus veya SerpAPI down olsa bile diğeri devam eder
 """
 
 import asyncio
+import re
 import urllib.parse
 from difflib import SequenceMatcher
 
@@ -184,6 +189,9 @@ class SearchAgent(BaseAgent):
         gift_intent = parsed.get("gift_intent", False) or parsed.get("gift_context", False)
         inferred_categories = parsed.get("inferred_categories", [])
 
+        # Spesifik marka+model mi (iPhone 15) yoksa genel/kategori mi (bütçeme uygun iPhone)?
+        is_specific_product = parsed.get("is_specific_product", False)
+
         # Kullanıcı fiyat belirtmemişse → otomatik bütçe tahmini
         budget_was_inferred = False
         if not budget:
@@ -220,49 +228,103 @@ class SearchAgent(BaseAgent):
 
         self.logger.info(f"Search query: {search_query} | budget: {budget} | tags: {tags}")
 
-        # 3. SerpAPI ile ürün çek
-        products = await asyncio.to_thread(
-            self._search_google_shopping_sync, search_query, budget
-        )
+        # 3. Ürün çek — ENABLE_MANUS=true ise paralel, yoksa sadece SerpAPI
+        budget_range = None
+        if budget:
+            budget_range = {"min": 0, "max": float(budget)}
+        over_budget_products: list = []
+        budget_exceeded_warning: dict | None = None
 
-        # Boş sonuçta kalan tag'leri sırayla dene
-        if not products and len(tags) > 1:
-            for alt_tag in tags[1:]:
-                self.logger.info(f"Alternatif tag deneniyor: {alt_tag}")
-                products = await asyncio.to_thread(
-                    self._search_google_shopping_sync, alt_tag, budget
+        if settings.ENABLE_MANUS and self._is_user_in_manus_rollout(input_data.get("user_id")):
+            # ── Paralel: Manus + SerpAPI aynı anda ──────────────────────────
+            products = await self._parallel_search(search_query, budget, budget_range, parsed)
+            self.logger.info(f"[search] paralel mod | {len(products)} ürün bulundu")
+        else:
+            # ── Legacy: Sadece SerpAPI ──────────────────────────────────────
+            #
+            # İKİ MOD:
+            # A) Spesifik ürün (iPhone 15, Galaxy S24):
+            #    → Bütçe filtresi olmadan ara, over_budget badge'i ile göster
+            # B) Genel/kategori (bütçeme uygun iPhone, ucuz telefon):
+            #    → Bütçe filtresiyle ara, boşsa kategori fallback
+
+            if is_specific_product:
+                # ── MOD A: Spesifik ürün — filtre yok, over_budget badge ────
+                self.logger.info(f"[search] Spesifik ürün modu: {search_query}")
+                raw = await asyncio.to_thread(
+                    self._search_google_shopping_sync,
+                    search_query, budget,
+                    True,  # no_budget_filter
+                    True,  # mark_over_budget
                 )
-                if products:
-                    break
-
-        # Hâlâ boşsa ham sorguyu dene
-        if not products and search_query != query:
-            self.logger.info("Ham sorgu ile tekrar deneniyor")
-            words = query.split()
-            fallback = " ".join(words[:5]) if len(words) > 5 else query
-            products = await asyncio.to_thread(
-                self._search_google_shopping_sync, fallback, budget
-            )
-
-        # inferred_categories fallback
-        if not products and inferred_categories:
-            for cat in inferred_categories:
-                cat_query = _build_query_from_category(cat, recipient)
-                self.logger.info(f"Category fallback deneniyor: {cat_query}")
+                raw = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
+                products = raw[:5]
+                # over_budget olarak işaretlenenleri ayır
+                over_budget_products = [p for p in products if p.get("over_budget")]
+                products = [p for p in products if not p.get("over_budget")]
+                if over_budget_products and not products:
+                    # Tamamı bütçeyi aşıyor
+                    min_price = min(
+                        (p["price"] for p in over_budget_products if p.get("price", 0) > 0),
+                        default=0,
+                    )
+                    budget_exceeded_warning = {
+                        "requested_query": search_query,
+                        "min_found_price": round(min_price),
+                        "user_budget": round(budget) if budget else 0,
+                    }
+                    self.logger.info(
+                        f"[search] Spesifik ürün bütçeyi aşıyor | "
+                        f"over_budget={len(over_budget_products)} | min={min_price} TL"
+                    )
+            else:
+                # ── MOD B: Genel/kategori — bütçe filtresiyle ara ───────────
                 products = await asyncio.to_thread(
-                    self._search_google_shopping_sync, cat_query, budget
+                    self._search_google_shopping_sync, search_query, budget
                 )
-                if products:
-                    break
+                products = [p for p in products if not self._is_refurbished_or_grey_market(p)]
 
-        # Son çare: recipient/occasion'a göre kural tabanlı fallback
-        if not products and (recipient or occasion):
-            fallback_query = self._get_gift_fallback(recipient, occasion, budget)
-            if fallback_query:
-                self.logger.info(f"Hediye fallback deneniyor: {fallback_query}")
-                products = await asyncio.to_thread(
-                    self._search_google_shopping_sync, fallback_query, budget
-                )
+                # Boş sonuçta kalan tag'leri sırayla dene
+                if not products and len(tags) > 1:
+                    for alt_tag in tags[1:]:
+                        self.logger.info(f"Alternatif tag deneniyor: {alt_tag}")
+                        raw = await asyncio.to_thread(
+                            self._search_google_shopping_sync, alt_tag, budget
+                        )
+                        products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
+                        if products:
+                            break
+
+                # Hâlâ boşsa ham sorguyu dene
+                if not products and search_query != query:
+                    words = query.split()
+                    fallback_q = " ".join(words[:5]) if len(words) > 5 else query
+                    raw = await asyncio.to_thread(
+                        self._search_google_shopping_sync, fallback_q, budget
+                    )
+                    products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
+
+                # inferred_categories fallback
+                if not products and inferred_categories:
+                    for cat in inferred_categories:
+                        cat_query = _build_query_from_category(cat, recipient)
+                        self.logger.info(f"Category fallback: {cat_query}")
+                        raw = await asyncio.to_thread(
+                            self._search_google_shopping_sync, cat_query, budget
+                        )
+                        products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
+                        if products:
+                            break
+
+                # Son çare: hediye fallback
+                if not products and (recipient or occasion):
+                    fallback_query = self._get_gift_fallback(recipient, occasion, budget)
+                    if fallback_query:
+                        self.logger.info(f"Hediye fallback: {fallback_query}")
+                        raw = await asyncio.to_thread(
+                            self._search_google_shopping_sync, fallback_query, budget
+                        )
+                        products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
 
         # Karşılaştırma modunda: her ürün için ayrı arama yap
         if is_comparison and comparison_products and len(products) < 2:
@@ -306,9 +368,17 @@ class SearchAgent(BaseAgent):
             "is_comparison": is_comparison,
             "total_found": len(products),
             "products": products,
+            "over_budget_products": over_budget_products,
+            "budget_exceeded_warning": budget_exceeded_warning,
         }
 
-    def _search_google_shopping_sync(self, query: str, budget: float = None) -> list:
+    def _search_google_shopping_sync(
+        self,
+        query: str,
+        budget: float = None,
+        no_budget_filter: bool = False,
+        mark_over_budget: bool = False,
+    ) -> list:
         try:
             if not settings.SERPAPI_KEY:
                 self.logger.error("SERPAPI_KEY boş — .env dosyasını kontrol et!")
@@ -342,7 +412,7 @@ class SearchAgent(BaseAgent):
 
                 # Fiyat parse edilemişse ve budget varsa filtrele
                 # %20 tolerans: tahmini bütçede biraz esneklik ver
-                if budget and price > 0 and price > float(budget) * 1.20:
+                if not no_budget_filter and budget and price > 0 and price > float(budget) * 1.20:
                     continue
 
                 serpapi_product_id = (
@@ -357,7 +427,7 @@ class SearchAgent(BaseAgent):
                 real_link = item.get("link") or item.get("product_link")
                 product_url = real_link if real_link else self._generate_url(name, seller)
 
-                products.append({
+                product_entry = {
                     "name": name,
                     "price": price,
                     "seller": seller,
@@ -368,7 +438,10 @@ class SearchAgent(BaseAgent):
                     "image_url": item.get("thumbnail", ""),
                     "recommendation_reason": "",
                     "serpapi_product_id": serpapi_product_id,
-                })
+                }
+                if mark_over_budget and budget and price > float(budget) * 1.20:
+                    product_entry["over_budget"] = True
+                products.append(product_entry)
 
             return products
 
@@ -525,3 +598,271 @@ class SearchAgent(BaseAgent):
             self.logger.info(f"{len(rows)} ürün Supabase'e kaydedildi")
         except Exception as e:
             self.logger.error(f"Supabase kayıt hatası: {e}")
+
+    # ── FAZ 3: Paralel Manus + SerpAPI ──────────────────────────────────────
+
+    def _is_user_in_manus_rollout(self, user_id: str | None) -> bool:
+        """Kullanıcı Manus rollout yüzdeliğine dahil mi?"""
+        import hashlib
+        pct = settings.MANUS_ROLLOUT_PERCENTAGE
+        if pct >= 100:
+            return True
+        if pct <= 0 or not user_id:
+            return False
+        hash_val = int(hashlib.md5(user_id.encode()).hexdigest(), 16)
+        return (hash_val % 100) < pct
+
+    async def _parallel_search(
+        self,
+        search_query: str,
+        budget: float | None,
+        budget_range: dict | None,
+        parsed: dict,
+    ) -> list:
+        """Manus + SerpAPI paralel çalıştır, sonuçları birleştir."""
+        from app.services.llm.factory import LLMFactory
+
+        manus_client = LLMFactory.get_manus()
+
+        manus_task = asyncio.create_task(
+            self._safe_manus_search(manus_client, search_query, budget_range)
+        )
+        serpapi_task = asyncio.create_task(
+            self._safe_serpapi_search(search_query, budget)
+        )
+
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(manus_task, serpapi_task, return_exceptions=True),
+                timeout=20,
+            )
+            manus_result, serpapi_result = results
+        except asyncio.TimeoutError:
+            self.logger.warning("[search] paralel arama timeout (20s)")
+            manus_result = manus_task.result() if manus_task.done() else {"products": []}
+            serpapi_result = serpapi_task.result() if serpapi_task.done() else {"products": []}
+            for t in (manus_task, serpapi_task):
+                if not t.done():
+                    t.cancel()
+
+        manus_products = (
+            manus_result.get("products", []) if isinstance(manus_result, dict) else []
+        )
+        serpapi_products = (
+            serpapi_result.get("products", []) if isinstance(serpapi_result, dict) else []
+        )
+
+        provider_log = []
+        if manus_products:
+            provider_log.append(f"manus={len(manus_products)}")
+        if serpapi_products:
+            provider_log.append(f"serpapi={len(serpapi_products)}")
+        self.logger.info(f"[search] paralel sonuç | {', '.join(provider_log) or 'boş'}")
+
+        merged = self._merge_results(manus_products, serpapi_products)
+
+        # Manus da boşsa SerpAPI fallback zinciri
+        if not merged:
+            self.logger.info("[search] paralel sonuç boş, SerpAPI fallback zincirine geçiliyor")
+            merged = await asyncio.to_thread(
+                self._search_google_shopping_sync, search_query, budget
+            )
+
+        return merged
+
+    async def _safe_manus_search(self, manus_client, query: str, budget_range: dict | None) -> dict:
+        """Manus araması — hata fırlatmaz."""
+        try:
+            result = await manus_client.research_products(
+                query=query,
+                budget_range=budget_range,
+                max_results=10,
+            )
+            if result.get("error"):
+                self.logger.warning(f"[manus] error: {result['error']}")
+                return {"products": []}
+            # Manus ürünlerini ortak formata çevir
+            normalized = []
+            for p in result.get("products", []):
+                normalized.append({
+                    "name": p.get("name", ""),
+                    "price": float(p.get("price") or 0),
+                    "seller": p.get("source", "manus"),
+                    "rating": float(p.get("rating") or 0),
+                    "rating_count": int(p.get("review_count") or 0),
+                    "description": p.get("description", ""),
+                    "url": p.get("url", ""),
+                    "image_url": p.get("image_url", ""),
+                    "recommendation_reason": "",
+                    "source_provider": "manus",
+                })
+            return {"products": normalized}
+        except Exception as e:
+            self.logger.warning(f"[manus] safe_search exception: {e}")
+            return {"products": []}
+
+    async def _safe_serpapi_search(self, query: str, budget: float | None) -> dict:
+        """SerpAPI araması — hata fırlatmaz."""
+        try:
+            products = await asyncio.to_thread(
+                self._search_google_shopping_sync, query, budget
+            )
+            for p in products:
+                p["source_provider"] = "serpapi"
+            return {"products": products}
+        except Exception as e:
+            self.logger.warning(f"[serpapi] safe_search exception: {e}")
+            return {"products": []}
+
+    def _merge_results(self, manus_products: list, serpapi_products: list) -> list:
+        """
+        İki kaynaktan gelen ürünleri birleştir.
+        Manus öncelikli (daha zengin veri). SerpAPI tamamlayıcı.
+        Benzer isimli ürünler tek seferde, en zengin veriyle gösterilir.
+        """
+        merged = []
+        seen_names: set[str] = set()
+
+        for product in manus_products:
+            norm = self._normalize_product_name(product.get("name", ""))
+            if norm and norm not in seen_names:
+                merged.append(product)
+                seen_names.add(norm)
+
+        for product in serpapi_products:
+            norm = self._normalize_product_name(product.get("name", ""))
+            if norm and norm not in seen_names:
+                merged.append(product)
+                seen_names.add(norm)
+            else:
+                # Aynı ürün varsa daha ucuz fiyatı işaretle
+                self._update_with_better_price(merged, norm, product)
+
+        # Rating + fiyat skoruna göre sırala
+        merged.sort(
+            key=lambda p: (
+                p.get("rating", 0),
+                1 if p.get("source_provider") == "manus" else 0,
+                -(p.get("price") or 999999),
+            ),
+            reverse=True,
+        )
+        return merged[:10]
+
+    @staticmethod
+    def _normalize_product_name(name: str) -> str:
+        """Ürün isimlerini eşleştirme için normalize et."""
+        if not name:
+            return ""
+        n = name.lower()
+        n = re.sub(r"[^a-z0-9çğışöüâîû]", "", n)
+        return n[:20]
+
+    @staticmethod
+    def _is_refurbished_or_grey_market(product: dict) -> bool:
+        """
+        Yenilenmiş, yurt dışı veya gray market ürünü mü?
+        casefold() kullanılır — Türkçe İ/ı büyük/küçük harf dönüşümü
+        Python str.lower() ile tam çalışmayabileceğinden casefold() daha güvenli.
+        """
+        _KEYWORDS = [
+            "yenilenmiş", "yenilenmis", "refurbished", "renewed",
+            "yurt dışı", "yurt disi", "gray market", "grey market",
+            "ithal", "paralel ithalat", "outlet", "teşhir", "teshir",
+            "açık kutu", "acik kutu", "open box",
+            "kullanılmış", "kullanilmis", "ikinci el", "2. el",
+            "- iyi", "- çok iyi", "- mükemmel",  # Trendyol yenilenmiş notasyonu
+        ]
+        name_cf = (product.get("name") or "").casefold()
+        desc_cf = (product.get("description") or "").casefold()
+        seller_cf = (product.get("seller") or "").casefold()
+        text = name_cf + " " + desc_cf + " " + seller_cf
+        return any(kw.casefold() in text for kw in _KEYWORDS)
+
+    @staticmethod
+    def _build_brand_alt_query(brand: str, original_query: str, inferred_categories: list) -> str:
+        """
+        Bütçeye uygun alternatif için arama sorgusu üret.
+        Sadece marka adı yerine marka + kategori ipucu kullan.
+        Örn: brand="iPhone", query="iPhone 16" → "iPhone ucuz modeller"
+             brand="Apple", query="iPhone" → "Apple iPhone uygun fiyat"
+             brand="Samsung", query="Samsung Galaxy S24" → "Samsung Galaxy uygun fiyat"
+        """
+        # Marka → kategori eşlemesi
+        _BRAND_CATEGORY = {
+            "iphone": "iPhone",
+            "apple": "Apple iPhone",
+            "samsung": "Samsung Galaxy",
+            "xiaomi": "Xiaomi telefon",
+            "huawei": "Huawei telefon",
+            "dyson": "Dyson",
+            "nike": "Nike",
+            "adidas": "Adidas",
+        }
+        brand_lower = brand.lower()
+        base = _BRAND_CATEGORY.get(brand_lower, brand)
+
+        # inferred_categories'den kategori ipucu al
+        cat_hint = ""
+        if inferred_categories:
+            cat_map = {
+                "akıllı telefon": "telefon",
+                "telefon": "telefon",
+                "laptop": "laptop",
+                "bilgisayar": "bilgisayar",
+                "kulaklık": "kulaklık",
+                "tablet": "tablet",
+                "saat": "saat",
+            }
+            for cat in inferred_categories:
+                mapped = cat_map.get(cat.lower())
+                if mapped and mapped.lower() not in base.lower():
+                    cat_hint = mapped
+                    break
+
+        if cat_hint:
+            return f"{base} {cat_hint} uygun fiyat"
+        return f"{base} uygun fiyat"
+
+    @staticmethod
+    def _extract_brand(query: str) -> str:
+        """
+        Arama sorgusundan marka adını çıkar.
+        Örn: "iPhone 15" → "iPhone", "Samsung Galaxy S24" → "Samsung"
+        """
+        _KNOWN_BRANDS = [
+            "apple", "iphone", "samsung", "xiaomi", "huawei", "oppo", "vivo",
+            "realme", "oneplus", "sony", "lg", "motorola", "nokia", "asus",
+            "lenovo", "hp", "dell", "acer", "msi", "dyson", "nike", "adidas",
+            "puma", "zara", "h&m", "philips", "bosch", "siemens", "arçelik",
+            "vestel", "beko", "grundig", "casio", "citizen", "seiko",
+        ]
+        lower = query.lower()
+        for brand in _KNOWN_BRANDS:
+            if brand in lower:
+                # İlk kelimeyi de kontrol et (Samsung Galaxy → Samsung)
+                words = query.split()
+                if words and words[0].lower() == brand:
+                    return words[0]
+                return brand.capitalize()
+        # Sorgunun ilk kelimesi büyük harfle başlıyorsa marka olabilir
+        words = query.split()
+        if words and words[0][0].isupper():
+            return words[0]
+        return ""
+
+    @staticmethod
+    def _update_with_better_price(merged: list, norm_name: str, new_product: dict):
+        """Aynı ürün varsa daha ucuz fiyatı 'alternative_price' olarak işaretle."""
+        for existing in merged:
+            ex_norm = re.sub(r"[^a-z0-9çğışöüâîû]", "", existing.get("name", "").lower())[:20]
+            if ex_norm == norm_name:
+                ep = existing.get("price") or 0
+                np_ = new_product.get("price") or 0
+                if np_ > 0 and (ep == 0 or np_ < ep):
+                    existing["alternative_price"] = {
+                        "price": np_,
+                        "source": new_product.get("seller", ""),
+                        "url": new_product.get("url", ""),
+                    }
+                break

@@ -326,10 +326,14 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
 
 export default function Sidebar({ userName, userEmail }: SidebarProps) {
   const { t } = useTranslation();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [history, setHistory] = useState<ChatHistory[]>([]);
 
+  // Rota veya conversation_id değişince listeyi yenile
+  // (yeni sohbet oluşunca veya clearChat sonrası URL değişince otomatik güncellenir)
   useEffect(() => {
     chatApi.getConversations(15)
       .then((d: unknown) => {
@@ -337,7 +341,7 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
         setHistory(data.history || []);
       })
       .catch(() => {});
-  }, []);
+  }, [pathname, searchParams]);
 
   const handleDeleteHistoryItem = (id: string) => {
     setHistory((prev) => prev.filter((h) => h.id !== id));
