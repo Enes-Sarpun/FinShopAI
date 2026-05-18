@@ -14,6 +14,7 @@ Değişiklikler:
 """
 
 import asyncio
+import random
 import re
 import urllib.parse
 from difflib import SequenceMatcher
@@ -101,8 +102,48 @@ def _build_query_from_category(category: str, recipient: str = None) -> str:
     return cat.get(recipient) or cat.get(None) or category.replace("_", " ")
 
 
+_SPECIFIC_BRANDS = {
+    "iphone", "samsung", "galaxy", "xiaomi", "huawei", "oppo", "realme",
+    "oneplus", "sony", "motorola", "nokia", "asus", "lenovo", "hp", "dell",
+    "acer", "msi", "macbook", "ipad", "airpods", "dyson", "casio", "seiko",
+}
+_SPECIFIC_MODEL_RE = re.compile(
+    r"\b(iphone\s*\d+|galaxy\s*[a-z]?\d+|redmi|poco|mi\s*\d+|macbook|ipad|airpods)\b",
+    re.IGNORECASE,
+)
+_STOP_SUFFIXES = (
+    " almak istiyorum", " almak istiyorum.", " satın almak istiyorum",
+    " öner", " önerir misin", " arıyorum", " bakıyorum",
+    " istiyorum", " almayı düşünüyorum", " tavsiye et",
+)
+
+
+def _detect_specific_product(query: str) -> bool:
+    """LLM olmadan kural tabanlı spesifik ürün/marka tespiti."""
+    lower = query.lower()
+    if _SPECIFIC_MODEL_RE.search(lower):
+        return True
+    return any(brand in lower for brand in _SPECIFIC_BRANDS)
+
+
+def _clean_query_fallback(query: str) -> str:
+    """
+    LLM parse başarısız olduğunda ham sorgudan temiz arama sorgusu çıkar.
+    Fiil/yardımcı kelimeler kırpılır, renk + ürün adı korunur.
+    Örn: "pembe iPhone 16 almak istiyorum" → "pembe iPhone 16"
+    """
+    text = query.strip()
+    lower = text.lower()
+    for suffix in _STOP_SUFFIXES:
+        if lower.endswith(suffix):
+            text = text[: len(text) - len(suffix)].strip()
+            lower = text.lower()
+            break
+    words = text.split()
+    return " ".join(words[:6]) if len(words) > 6 else text
+
+
 def _similarity(a: str, b: str) -> float:
-    """İki string arasındaki benzerlik oranı (0-1)."""
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
@@ -115,12 +156,10 @@ def _deduplicate(products: list, threshold: float = 0.80) -> list:
     for p in products:
         name = p.get("name", "")
         is_dup = False
-        for u in unique:
+        for idx, u in enumerate(unique):
             if _similarity(name, u.get("name", "")) >= threshold:
-                # Daha ucuz olanı tut
                 if p.get("price", 0) < u.get("price", float("inf")):
-                    unique.remove(u)
-                    unique.append(p)
+                    unique[idx] = p
                 is_dup = True
                 break
         if not is_dup:
@@ -192,6 +231,9 @@ class SearchAgent(BaseAgent):
 
         # Spesifik marka+model mi (iPhone 15) yoksa genel/kategori mi (bütçeme uygun iPhone)?
         is_specific_product = parsed.get("is_specific_product", False)
+        # LLM parse başarısız olduysa kural tabanlı tespit
+        if not llm_parse_ok:
+            is_specific_product = _detect_specific_product(query)
 
         # Kullanıcı fiyat belirtmemişse → otomatik bütçe tahmini
         budget_was_inferred = False
@@ -199,8 +241,11 @@ class SearchAgent(BaseAgent):
             user_budget_metrics = input_data.get("user_budget") or {}
             spendable = user_budget_metrics.get("spendable_after_savings") or 0
 
-            if gift_intent and (recipient or occasion):
-                # Hediye sorgusu: alıcı/occasion bazlı aralık
+            # Spesifik ürün (iPhone 16, Samsung S24) → inferred budget uygulanmaz
+            # Fiyatı önceden bilinemeyen ürünleri budget ile kesmek yanlış sonuç verir
+            if is_specific_product:
+                pass
+            elif gift_intent and (recipient or occasion) and spendable > 0:
                 inferred_bgt = infer_budget_from_context(
                     user_budget=user_budget_metrics,
                     recipient=recipient,
@@ -211,19 +256,16 @@ class SearchAgent(BaseAgent):
                 budget_was_inferred = True
                 self.logger.info(f"Hediye bütçe tahmini: {inferred_bgt}")
             elif spendable > 0:
-                # Genel sorgu: bakiyenin %15'i makul üst sınır
-                # (50 TL alt sınır, 20.000 TL üst sınır)
                 auto_max = min(max(spendable * 0.15, 200), 20000)
                 budget = round(auto_max)
                 budget_was_inferred = True
                 self.logger.info(f"Genel bütçe tahmini: {budget} TL (spendable={spendable})")
 
-        # Tag'ler varsa ilk tag'i kullan (en spesifik), yoksa ham sorgu
+        # Tag'ler varsa ilk tag'i kullan; LLM parse başarısızsa query'yi temizle
         if tags:
             search_query = tags[0]
         elif not llm_parse_ok:
-            words = query.split()
-            search_query = " ".join(words[:5]) if len(words) > 5 else query
+            search_query = _clean_query_fallback(query)
         else:
             search_query = query
 
@@ -359,8 +401,8 @@ class SearchAgent(BaseAgent):
         if before != len(products):
             self.logger.info(f"Deduplicated: {before} → {len(products)} ürün")
 
-        # 5. İlk 3 ürün için LLM öneri nedeni üret (BATCH — tek çağrı)
-        top_products = products[:3]
+        # 5. İlk 5 ürün için LLM öneri nedeni üret (BATCH — tek çağrı)
+        top_products = products[:5]
         if top_products:
             reasons = await self._generate_reasons_batch(top_products, occasion, recipient)
             for i, product in enumerate(top_products):
@@ -568,7 +610,7 @@ class SearchAgent(BaseAgent):
             f"Durum: {occasion or 'belirtilmedi'} | Kime: {recipient or 'belirtilmedi'}\n\n"
             + "\n".join(product_lines) + "\n\n"
             "JSON formatında yanıt ver:\n"
-            '{"1": "ürün 1 öneri nedeni", "2": "ürün 2 öneri nedeni", "3": "ürün 3 öneri nedeni"}\n'
+            '{"1": "ürün 1 öneri nedeni", "2": "ürün 2", "3": "ürün 3", "4": "ürün 4", "5": "ürün 5"}\n'
             "SADECE JSON DÖNDÜR."
         )
 
@@ -616,15 +658,13 @@ class SearchAgent(BaseAgent):
     # ── FAZ 3: Paralel Manus + SerpAPI ──────────────────────────────────────
 
     def _is_user_in_manus_rollout(self, user_id: str | None) -> bool:
-        """Kullanıcı Manus rollout yüzdeliğine dahil mi?"""
-        import hashlib
+        """Her istek için rastgele seçim — MANUS_ROLLOUT_PERCENTAGE kadar şans."""
         pct = settings.MANUS_ROLLOUT_PERCENTAGE
         if pct >= 100:
             return True
-        if pct <= 0 or not user_id:
+        if pct <= 0:
             return False
-        hash_val = int(hashlib.md5(user_id.encode()).hexdigest(), 16)
-        return (hash_val % 100) < pct
+        return random.randint(1, 100) <= pct
 
     async def _parallel_search(
         self,

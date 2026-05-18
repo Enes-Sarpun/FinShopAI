@@ -44,6 +44,15 @@ GREETING_WORDS = {
     "hey", "hi", "hello", "naber", "nasılsın", "nasıl gidiyor",
 }
 
+# Bütçe sorgusu keyword'leri — hızlı yol için (LLM'den önce kontrol edilir)
+BUDGET_KEYWORDS = [
+    "bütçem", "bütçemi", "bütçemde", "bütçeme", "bütçemle",
+    "bütçeni görebilir", "bütçemi görebilir", "bütçeyi görebilir",
+    "param var mı", "param yeter mi", "harcayabilir miyim",
+    "ne kadar harcadım", "harcama durumum", "mali durum", "finansal durum",
+    "ne kadar param", "bütçem ne",
+]
+
 # Fallback keyword listesi — sadece LLM hata verirse kullanılır
 PRODUCT_KEYWORDS = [
     "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
@@ -132,16 +141,25 @@ class ConversationAgent(BaseAgent):
         message = input_data.get("message", "").strip()
         history = input_data.get("chat_history", [])
         budget_info = input_data.get("budget_info")
+        user_id = input_data.get("user_id")
 
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
 
-        # ── 1. Sadece açık selamlama → hızlı yol (LLM çağrısı yok) ──────
+        # ── 1a. Açık selamlama → hızlı yol (LLM çağrısı yok) ────────────
         lower = message.lower().strip()
         if len(lower) <= 35 and any(lower.startswith(g) or lower == g for g in GREETING_WORDS):
             elapsed = (time.monotonic() - t0) * 1000
             self.logger.info(f"[conv] quick=GREETING | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, _get_greeting_reply(message))
+
+        # ── 1b. Bütçe sorusu → hızlı yol ────────────────────────────────
+        if any(kw in lower for kw in BUDGET_KEYWORDS):
+            self.logger.info("[conv] quick=BUDGET_QUERY")
+            reply = await self._handle_budget_query(message, budget_info, user_id)
+            elapsed = (time.monotonic() - t0) * 1000
+            self.logger.info(f"[conv] BUDGET_QUERY done | {elapsed:.0f}ms")
+            return self._build_result("BUDGET_QUERY", 0.97, reply)
 
         # ── 2. Her şeyi LLM'e gönder ─────────────────────────────────────
         product_context = self._get_product_context(history)
@@ -207,16 +225,9 @@ class ConversationAgent(BaseAgent):
             comparison_products = []
             extracted_query = message if intent == "PRODUCT_SEARCH" else None
 
-        # ── 3. BUDGET_QUERY özel işlemi ──────────────────────────────────
-        if intent == "BUDGET_QUERY" and budget_info:
-            try:
-                budget_prompt = BUDGET_QUERY_PROMPT.format(
-                    budget_info=str(budget_info),
-                    message=message,
-                )
-                reply = await self.call_llm(budget_prompt, system=CONVERSATION_SYSTEM_PROMPT)
-            except Exception:
-                reply = "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
+        # ── 3. BUDGET_QUERY özel işlemi (LLM yoluyla gelenlerde) ─────────
+        if intent == "BUDGET_QUERY" and not reply:
+            reply = await self._handle_budget_query(message, budget_info, user_id)
 
         # ── 4. COMPLAINT özel işlemi ──────────────────────────────────────
         if intent == "COMPLAINT":
@@ -237,6 +248,48 @@ class ConversationAgent(BaseAgent):
             comparison_products=comparison_products,
             extracted_query=extracted_query,
         )
+
+    # ── Bütçe sorgusu işleyici ───────────────────────────────────────────────
+
+    async def _handle_budget_query(self, message: str, budget_info: dict | None, user_id: str | None = None) -> str:
+        """
+        Bütçe sorusunu yanıtlar.
+        budget_info dışarıdan geldiyse direkt kullanır,
+        yoksa BudgetAgent'ı kendisi çağırıp çeker.
+        """
+        if not budget_info and user_id:
+            try:
+                from app.agents.budget_agent import BudgetAgent
+                result = await BudgetAgent(llm=self.llm, db=self.db).execute(
+                    {"action": "analyze", "user_id": user_id}
+                )
+                budget_info = result.get("financial_metrics")
+            except Exception as e:
+                self.logger.error(f"[conv] BudgetAgent çağrısı başarısız: {e}")
+
+        if not budget_info:
+            return (
+                "Bütçe bilgilerine ulaşamadım. "
+                "Henüz bütçe girmediysen Ayarlar sayfasından ekleyebilirsin."
+            )
+
+        try:
+            b = budget_info if isinstance(budget_info, dict) else {}
+            budget_summary = (
+                f"Aylık gelir: {b.get('total_income', '?')} TL\n"
+                f"Sabit giderler: {b.get('fixed_expenses', '?')} TL\n"
+                f"Tasarruf hedefi: {b.get('savings_goal', 0)} TL\n"
+                f"Harcanabilir (tasarruf sonrası): {b.get('spendable_after_savings', '?')} TL\n"
+                f"Bu ay harcanan: {b.get('current_month_spending', 0)} TL\n"
+                f"Kalan harcanabilir: {b.get('remaining_spendable', '?')} TL"
+            )
+            prompt = BUDGET_QUERY_PROMPT.format(
+                budget_info=budget_summary,
+                message=message,
+            )
+            return await self.call_llm(prompt, system=CONVERSATION_SYSTEM_PROMPT)
+        except Exception:
+            return "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
 
     # ── v3: Bağlam yardımcıları ──────────────────────────────────────────────
 

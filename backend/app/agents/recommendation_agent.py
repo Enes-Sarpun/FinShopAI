@@ -570,14 +570,14 @@ class RecommendationAgent(BaseAgent):
             for p in products:
                 if p not in ranked:
                     ranked.append(p)
-            return ranked[:3]
+            return ranked[:5]
 
         # Gelişmiş fallback: hibrit value_score'a göre sırala
         return sorted(
             products,
             key=lambda p: (p.get("value_score") or 0),
             reverse=True,
-        )[:3]
+        )[:5]
 
     def _empty_result(self, message: str) -> dict:
         return {

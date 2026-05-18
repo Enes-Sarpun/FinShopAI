@@ -17,96 +17,108 @@ from app.core.logger import get_logger
 
 logger = get_logger("llm_service")
 
-_MAX_RETRIES = 3
-_BASE_DELAY = 1.5  # saniye (exponential backoff için)
+_BASE_DELAY = 1.5
 
-# ── Modül-seviyesi paylaşımlı durum ─────────────────────────────────────────
-# Gemini'yi sadece bir kez configure et + her (system_instruction) için tek bir
-# GenerativeModel instance'ı tut. Bu sayede her istekte yeni model nesnesi
-# oluşturmuyor, log spam'ini ve gereksiz kurulum maliyetini ortadan kaldırıyoruz.
-_GEMINI_CONFIGURED = False
-_BASE_MODEL: "genai.GenerativeModel | None" = None
-_SYSTEM_MODEL_CACHE: dict[str, "genai.GenerativeModel"] = {}
+# ── Key rotation state ───────────────────────────────────────────────────────
+# Her key için ayrı model cache. Quota bitince _current_key_idx ilerler.
+_current_key_idx = 0
+# key_str → {base: GenerativeModel, system_cache: {str: GenerativeModel}}
+_KEY_MODEL_CACHE: dict[str, dict] = {}
 
 
-def _ensure_configured() -> None:
-    global _GEMINI_CONFIGURED, _BASE_MODEL
-    if _GEMINI_CONFIGURED:
-        return
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    _BASE_MODEL = genai.GenerativeModel(settings.GEMINI_MODEL)
-    _GEMINI_CONFIGURED = True
-    logger.info(f"LLM initialized: {settings.GEMINI_MODEL}")
+def _is_quota_error(err_str: str) -> bool:
+    return any(kw in err_str for kw in ["quota", "rate", "429", "resource exhausted", "too many requests"])
 
 
-def _get_model(system: str | None) -> "genai.GenerativeModel":
-    _ensure_configured()
+def _build_models_for_key(api_key: str) -> dict:
+    genai.configure(api_key=api_key)
+    base = genai.GenerativeModel(settings.GEMINI_MODEL)
+    return {"base": base, "system_cache": {}}
+
+
+def _get_model_for_key(api_key: str, system: str | None) -> "genai.GenerativeModel":
+    entry = _KEY_MODEL_CACHE.get(api_key)
+    if entry is None:
+        entry = _build_models_for_key(api_key)
+        _KEY_MODEL_CACHE[api_key] = entry
     if not system:
-        return _BASE_MODEL  # type: ignore[return-value]
-    cached = _SYSTEM_MODEL_CACHE.get(system)
+        return entry["base"]
+    cached = entry["system_cache"].get(system)
     if cached is None:
-        cached = genai.GenerativeModel(
-            settings.GEMINI_MODEL,
-            system_instruction=system,
-        )
-        _SYSTEM_MODEL_CACHE[system] = cached
+        genai.configure(api_key=api_key)
+        cached = genai.GenerativeModel(settings.GEMINI_MODEL, system_instruction=system)
+        entry["system_cache"][system] = cached
     return cached
 
 
 class LLMService:
-    """Hafif facade. Asıl Gemini yapılandırması ve model cache modül
-    seviyesinde tutuluyor; bu sınıfı her istekte oluşturmak ucuz.
+    """Gemini multi-key facade.
+    Quota/rate-limit hatası alındığında otomatik olarak bir sonraki key'e geçer.
+    Tüm key'ler tükenirse son hatayı fırlatır.
     """
 
     def __init__(self):
-        _ensure_configured()
+        keys = settings.gemini_api_keys
+        if not keys:
+            raise RuntimeError("Hiç geçerli GEMINI_API_KEY bulunamadı.")
+        logger.info(f"LLMService başlatıldı | {len(keys)} Gemini key mevcut | model={settings.GEMINI_MODEL}")
 
-    # ── Ana üretim metodu (async, blocking Gemini thread'e taşındı) ──────────
+    # ── Ana üretim metodu ────────────────────────────────────────────────────
     async def generate(self, prompt: str, system: str = None) -> str:
+        global _current_key_idx
+        keys = settings.gemini_api_keys
         last_error = None
-        model = _get_model(system)
 
-        for attempt in range(1, _MAX_RETRIES + 1):
+        # Her key'i en fazla bir kez dene; quota hatası → sonraki key
+        for offset in range(len(keys)):
+            idx = (_current_key_idx + offset) % len(keys)
+            api_key = keys[idx]
+            model = _get_model_for_key(api_key, system)
+
             try:
                 t0 = time.monotonic()
-                # Blocking SDK çağrısını ayrı thread'e taşı
-                response = await asyncio.to_thread(
-                    model.generate_content, prompt
-                )
+                response = await asyncio.to_thread(model.generate_content, prompt)
                 elapsed = (time.monotonic() - t0) * 1000
 
-                # Token kullanımını logla
                 usage = getattr(response, "usage_metadata", None)
                 if usage:
                     logger.debug(
-                        f"LLM tokens | prompt={getattr(usage, 'prompt_token_count', '?')} "
+                        f"LLM tokens | key_idx={idx} "
+                        f"prompt={getattr(usage, 'prompt_token_count', '?')} "
                         f"output={getattr(usage, 'candidates_token_count', '?')} "
                         f"elapsed={elapsed:.0f}ms"
                     )
                 else:
-                    logger.debug(f"LLM call done | elapsed={elapsed:.0f}ms")
+                    logger.debug(f"LLM call done | key_idx={idx} | elapsed={elapsed:.0f}ms")
 
+                # Başarılı — key indeksini bu key'de bırak
+                _current_key_idx = idx
                 return response.text
 
             except Exception as e:
                 last_error = e
                 err_str = str(e).lower()
-                is_rate_limit = any(
-                    kw in err_str for kw in ["quota", "rate", "429", "resource exhausted"]
-                )
 
-                if is_rate_limit and attempt < _MAX_RETRIES:
-                    delay = _BASE_DELAY * (2 ** (attempt - 1))  # 1.5s, 3s, 6s
-                    logger.warning(
-                        f"LLM rate limit (attempt {attempt}/{_MAX_RETRIES}), "
-                        f"retrying in {delay:.1f}s..."
-                    )
-                    await asyncio.sleep(delay)
+                if _is_quota_error(err_str):
+                    logger.warning(f"Gemini key_idx={idx} quota/rate-limit — sonraki key'e geçiliyor. Hata: {e}")
+                    # Bir sonraki key'e geç
+                    _current_key_idx = (idx + 1) % len(keys)
+                    continue
                 else:
-                    logger.error(f"LLM error (attempt {attempt}): {e}")
+                    # Quota olmayan hata: exponential backoff ile aynı key'de yeniden dene
+                    for attempt in range(1, 3):
+                        delay = _BASE_DELAY * (2 ** (attempt - 1))
+                        logger.warning(f"LLM error (attempt {attempt}/2), retrying in {delay:.1f}s: {e}")
+                        await asyncio.sleep(delay)
+                        try:
+                            response = await asyncio.to_thread(model.generate_content, prompt)
+                            _current_key_idx = idx
+                            return response.text
+                        except Exception as e2:
+                            last_error = e2
                     break
 
-        raise last_error
+        raise last_error  # type: ignore[misc]
 
     # ── JSON üretimi ─────────────────────────────────────────────────────────
     async def generate_json(self, prompt: str, system: str = None) -> dict:
@@ -118,22 +130,18 @@ class LLMService:
     def _parse_json_safe(text: str) -> dict:
         text = text.strip()
 
-        # Markdown code fence temizle (``` veya ```json)
         if text.startswith("```"):
-            # İlk satırı (```json veya ```) ve son satırı (```) sil
             lines = text.split("\n")
             lines = lines[1:] if lines[0].startswith("```") else lines
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
             text = "\n".join(lines).strip()
 
-        # Düz parse dene
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
 
-        # Regex ile ilk JSON obje/array bul
         match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", text)
         if match:
             try:

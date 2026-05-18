@@ -61,10 +61,27 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
         else:
             history = []
 
+        # Bütçe ile ilgili soru olabilecek mesajlarda önceden bütçeyi çek —
+        # ConversationAgent'ın BUDGET_QUERY yanıtı üretebilmesi için gerekli.
+        # Keyword kontrolü ucuz; LLM çağrısından önce yapılır.
+        from app.agents.conversation_agent import BUDGET_KEYWORDS as _BUDGET_MSG_HINTS
+        budget_info = None
+        if any(hint in body.message.lower() for hint in _BUDGET_MSG_HINTS):
+            try:
+                from app.agents.budget_agent import BudgetAgent
+                budget_result = await BudgetAgent(llm=llm, db=db).execute(
+                    {"action": "analyze", "user_id": user_id}
+                )
+                budget_info = budget_result.get("financial_metrics")
+            except Exception:
+                pass
+
         conv_agent = ConversationAgent(llm=llm, db=db)
         conv_result = await conv_agent.execute({
             "message": body.message,
             "chat_history": history,
+            "budget_info": budget_info,
+            "user_id": user_id,
         })
 
         # Kullanıcı mesajını kaydet — conversation_id metadata'ya yazılır
@@ -90,10 +107,25 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             try:
                 user_metadata["conversation_id"] = user_msg_id
                 await db.update_chat_metadata(user_msg_id, user_id, user_metadata)
-            except Exception as e:
-                # metadata güncellemesi kritik değil; sidebar fallback'i yine
-                # bu mesajı conversation starter olarak gösterir.
+            except Exception:
                 pass
+
+            # Yeni sohbet: arka planda LLM ile kısa başlık üret (kritik yolu bloke etmez)
+            async def _generate_title(msg_id: str, message: str, meta: dict):
+                try:
+                    title_prompt = (
+                        f"Aşağıdaki kullanıcı mesajı için 4-6 kelimelik, Türkçe, öz bir sohbet başlığı yaz.\n"
+                        f"Sadece başlık metnini döndür, tırnak veya noktalama işareti ekleme.\n\n"
+                        f"Mesaj: {message}"
+                    )
+                    title = await llm.generate(title_prompt)
+                    title = (title or "").strip().strip('"').strip("'")[:60]
+                    if title:
+                        await db.update_chat_metadata(msg_id, user_id, {**meta, "title": title})
+                except Exception:
+                    pass
+            import asyncio as _asyncio
+            _asyncio.create_task(_generate_title(user_msg_id, body.message, user_metadata))
 
         # ── SOHBET MODU ──────────────────────────────────────────
         if not conv_result["is_product_request"]:

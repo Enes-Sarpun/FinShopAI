@@ -341,6 +341,22 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
       .catch(() => {});
   }, [pathname, searchParams]);
 
+  // Yeni sohbette LLM başlık üretimi ~1-2sn sürer. Liste yüklendikten 3sn sonra
+  // bir kez daha çekerek başlığın görünmesini sağla.
+  const loadId = searchParams?.get("load");
+  useEffect(() => {
+    if (!loadId) return;
+    const timer = setTimeout(() => {
+      chatApi.getConversations(15)
+        .then((d: unknown) => {
+          const data = d as { history: ChatHistory[] };
+          setHistory(data.history || []);
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [loadId]);
+
   const handleDeleteHistoryItem = (id: string) => {
     setHistory((prev) => prev.filter((h) => h.id !== id));
   };

@@ -56,6 +56,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [loadingThread, setLoadingThread] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
   const activeThreadId = useRef<string | null>(null);
   const paramHandled = useRef(false);
@@ -77,8 +78,14 @@ export default function ChatPage() {
       activeThreadId.current = loadId;
       const key = storageKey(loadId);
       const cached = loadFromStorage(key);
-      if (cached && cached.length > 0) { setMessages(cached); return; }
+      if (cached && cached.length > 0) {
+        setMessages(cached);
+        setLoadingThread(false);
+        return;
+      }
 
+      setLoadingThread(true);
+      setMessages([]);
       paramHandled.current = true;
       chatApi.getThread(loadId).then((d: unknown) => {
         const data = d as { thread: { id: string; message: string; role: string; metadata?: Record<string, unknown> }[] };
@@ -123,6 +130,8 @@ export default function ChatPage() {
         }
       }).catch(() => {
         setMessages([{ role: "bot", text: "⚠️ Sohbet yüklenirken bir hata oluştu." }]);
+      }).finally(() => {
+        setLoadingThread(false);
       });
       return;
     }
@@ -346,16 +355,16 @@ export default function ChatPage() {
               <textarea
                 ref={inputRef}
                 rows={1}
-                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 resize-none outline-none leading-relaxed"
-                placeholder="Bir şey sor..."
+                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400/80 resize-none outline-none leading-normal"
+                placeholder="Bugün ne arıyoruz? Ürün, bütçe, hediye... 🛍️"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={sending}
-                style={{ height: "auto", minHeight: "24px" }}
+                style={{ height: "auto", minHeight: "22px" }}
               />
               <button onClick={() => send(input)} disabled={!input.trim() || sending}
-                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all flex-shrink-0 mb-0.5 shadow-sm active:scale-95">
+                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all flex-shrink-0 shadow-sm active:scale-95">
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
             </div>
@@ -367,6 +376,24 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ThreadSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {[75, 55, 80, 45, 65].map((w, i) => (
+        <div key={i} className={`flex ${i % 2 === 0 ? "justify-start gap-3" : "justify-end"}`}>
+          {i % 2 === 0 && (
+            <div className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-gray-700 flex-shrink-0 mt-1" />
+          )}
+          <div
+            className="h-9 rounded-2xl bg-gray-200 dark:bg-gray-700"
+            style={{ width: `${w}%`, maxWidth: "75%" }}
+          />
+        </div>
+      ))}
     </div>
   );
 }

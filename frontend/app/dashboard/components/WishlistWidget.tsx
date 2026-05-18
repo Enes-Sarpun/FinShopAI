@@ -189,20 +189,14 @@ export default function WishlistWidget() {
             </div>
           </div>
 
-          {/* Ürün listesi (max 4) */}
-          <div className="space-y-0.5">
+          {/* Ürün listesi — kaydırılabilir */}
+          <div className="space-y-0.5 max-h-72 overflow-y-auto">
             <AnimatePresence mode="popLayout">
-              {items.slice(0, 4).map((item) => (
+              {items.map((item) => (
                 <ItemRow key={item.id} item={item} onRemove={handleRemove} />
               ))}
             </AnimatePresence>
           </div>
-
-          {items.length > 4 && (
-            <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50">
-              {t("wishlist.moreItems", { count: items.length - 4 })}
-            </p>
-          )}
         </>
       )}
     </div>
