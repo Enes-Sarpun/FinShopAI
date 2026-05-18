@@ -198,9 +198,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
       <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200/80 dark:border-gray-700/60">
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center gap-2 px-1" onClick={onClose}>
-            <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <ShoppingBag className="w-3.5 h-3.5 text-white" />
-            </div>
+            <ShoppingBag className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
             <span className="font-bold text-gray-900 dark:text-gray-100 text-sm">FinShop AI</span>
           </Link>
         )}

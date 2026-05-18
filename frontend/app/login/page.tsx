@@ -1,6 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   ShoppingBag, Mail, Lock, User, ArrowRight, Eye, EyeOff, ArrowLeft,
@@ -14,21 +15,21 @@ import { authApi } from "@/lib/api";
 ───────────────────────────────────────────────────────── */
 const BG_ICONS = [
   // [Icon, x%, y%, boyut, opaklık, süre(s), gecikme(s), döndürme]
-  { Icon: ShoppingBag,  x: 8,  y: 12, size: 28, op: 0.18, dur: 7,  del: 0,   rot: -15 },
-  { Icon: Gift,         x: 82, y: 8,  size: 32, op: 0.15, dur: 9,  del: 1.2, rot: 12  },
-  { Icon: Star,         x: 20, y: 75, size: 22, op: 0.20, dur: 6,  del: 0.5, rot: 20  },
-  { Icon: Sparkles,     x: 90, y: 65, size: 26, op: 0.16, dur: 8,  del: 2,   rot: -8  },
-  { Icon: Tag,          x: 5,  y: 50, size: 24, op: 0.14, dur: 10, del: 1.8, rot: 25  },
-  { Icon: ShoppingCart, x: 75, y: 82, size: 30, op: 0.17, dur: 7.5,del: 0.8, rot: -20 },
-  { Icon: Heart,        x: 50, y: 6,  size: 20, op: 0.13, dur: 11, del: 3,   rot: 10  },
-  { Icon: Zap,          x: 60, y: 88, size: 22, op: 0.18, dur: 6.5,del: 2.5, rot: -30 },
-  { Icon: Package,      x: 35, y: 20, size: 26, op: 0.12, dur: 9,  del: 1,   rot: 15  },
-  { Icon: CreditCard,   x: 15, y: 88, size: 28, op: 0.14, dur: 8,  del: 4,   rot: -10 },
-  { Icon: Percent,      x: 92, y: 35, size: 24, op: 0.16, dur: 7,  del: 0.3, rot: 18  },
-  { Icon: Diamond,      x: 45, y: 92, size: 20, op: 0.13, dur: 10, del: 2.2, rot: -22 },
-  { Icon: Gift,         x: 70, y: 18, size: 22, op: 0.15, dur: 8.5,del: 3.5, rot: 8   },
-  { Icon: Star,         x: 30, y: 55, size: 18, op: 0.12, dur: 7,  del: 1.5, rot: -5  },
-  { Icon: ShoppingBag,  x: 88, y: 50, size: 24, op: 0.14, dur: 9.5,del: 0.7, rot: 22  },
+  { Icon: ShoppingBag, x: 8, y: 12, size: 28, op: 0.18, dur: 7, del: 0, rot: -15 },
+  { Icon: Gift, x: 82, y: 8, size: 32, op: 0.15, dur: 9, del: 1.2, rot: 12 },
+  { Icon: Star, x: 20, y: 75, size: 22, op: 0.20, dur: 6, del: 0.5, rot: 20 },
+  { Icon: Sparkles, x: 90, y: 65, size: 26, op: 0.16, dur: 8, del: 2, rot: -8 },
+  { Icon: Tag, x: 5, y: 50, size: 24, op: 0.14, dur: 10, del: 1.8, rot: 25 },
+  { Icon: ShoppingCart, x: 75, y: 82, size: 30, op: 0.17, dur: 7.5, del: 0.8, rot: -20 },
+  { Icon: Heart, x: 50, y: 6, size: 20, op: 0.13, dur: 11, del: 3, rot: 10 },
+  { Icon: Zap, x: 60, y: 88, size: 22, op: 0.18, dur: 6.5, del: 2.5, rot: -30 },
+  { Icon: Package, x: 35, y: 20, size: 26, op: 0.12, dur: 9, del: 1, rot: 15 },
+  { Icon: CreditCard, x: 15, y: 88, size: 28, op: 0.14, dur: 8, del: 4, rot: -10 },
+  { Icon: Percent, x: 92, y: 35, size: 24, op: 0.16, dur: 7, del: 0.3, rot: 18 },
+  { Icon: Diamond, x: 45, y: 92, size: 20, op: 0.13, dur: 10, del: 2.2, rot: -22 },
+  { Icon: Gift, x: 70, y: 18, size: 22, op: 0.15, dur: 8.5, del: 3.5, rot: 8 },
+  { Icon: Star, x: 30, y: 55, size: 18, op: 0.12, dur: 7, del: 1.5, rot: -5 },
+  { Icon: ShoppingBag, x: 88, y: 50, size: 24, op: 0.14, dur: 9.5, del: 0.7, rot: 22 },
 ] as const;
 
 function FloatingIcons() {
@@ -72,11 +73,11 @@ const field = (i: number) => ({
 ═══════════════════════════════════════ */
 function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const router = useRouter();
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPw, setShowPw]     = useState(false);
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -152,11 +153,11 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPw, setShowPw]     = useState(false);
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -238,7 +239,7 @@ function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
 ═══════════════════════════════════════ */
 const STRIPE_TEXT = "FinShop AI";
 const STRIPE_REPEAT = 14; // her satırda kaç tekrar
-const STRIPE_ROWS   = 18; // kaç satır
+const STRIPE_ROWS = 18; // kaç satır
 
 function StripeBg() {
   return (
@@ -277,10 +278,8 @@ function BrandPanel({ onSwitch, label, btnText, isRight = false }:
       {/* İçerik */}
       <div className="relative z-10 flex flex-col items-center text-center">
         <div className="logo-float mb-6">
-          <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-white/30 shadow-lg">
-            <ShoppingBag className="w-10 h-10 text-white" />
+            <ShoppingBag className="w-14 h-14 text-white drop-shadow-lg" />
           </div>
-        </div>
         <h1 className="text-3xl font-bold mb-2">FinShop AI</h1>
         <p className="text-white/80 text-sm leading-relaxed mb-10 max-w-[200px]">{label}</p>
         <button onClick={onSwitch}
