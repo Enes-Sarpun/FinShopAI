@@ -41,8 +41,16 @@ from app.prompts.conversation_prompts import (
 # Hızlı yol için sadece selamlama kelimeleri (LLM çağrısı yapılmaz)
 GREETING_WORDS = {
     "merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar",
-    "hey", "hi", "hello", "naber", "nasılsın", "nasıl gidiyor",
+    "hey", "hi", "hello",
 }
+
+# Hal hatır soruları — ayrı hızlı yanıt havuzu
+HOWRU_WORDS = {"naber", "nasılsın", "nasıl gidiyor", "ne haber", "iyi misin"}
+HOWRU_REPLIES = [
+    "İyiyim, teşekkürler! 😊 Sen nasılsın? Bugün ne arıyoruz?",
+    "Gayet iyiyim! Sağ ol. Sana nasıl yardımcı olabilirim? 🛍️",
+    "Çok iyiyim, teşekkürler! Bugün bir şeyler mi arıyoruz?",
+]
 
 # Bütçe sorgusu keyword'leri — hızlı yol için (LLM'den önce kontrol edilir)
 BUDGET_KEYWORDS = [
@@ -153,7 +161,13 @@ class ConversationAgent(BaseAgent):
             self.logger.info(f"[conv] quick=GREETING | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, _get_greeting_reply(message))
 
-        # ── 1b. Bütçe sorusu → hızlı yol ────────────────────────────────
+        # ── 1b. Hal hatır sorusu → hızlı yol ────────────────────────────
+        if len(lower) <= 40 and any(lower.startswith(g) or lower == g for g in HOWRU_WORDS):
+            elapsed = (time.monotonic() - t0) * 1000
+            self.logger.info(f"[conv] quick=HOWRU | {elapsed:.0f}ms")
+            return self._build_result("GREETING", 0.99, random.choice(HOWRU_REPLIES))
+
+        # ── 1c. Bütçe sorusu → hızlı yol ────────────────────────────────
         if any(kw in lower for kw in BUDGET_KEYWORDS):
             self.logger.info("[conv] quick=BUDGET_QUERY")
             reply = await self._handle_budget_query(message, budget_info, user_id)

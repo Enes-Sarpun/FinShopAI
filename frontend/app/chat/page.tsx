@@ -298,7 +298,7 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
 
-            {/* Yeni sohbet karşılama ekranı */}
+            {/* Welcome hero */}
             <AnimatePresence>
               {messages.length <= 2 && messages.every(m => m.role === "bot") && !sending && (
                 <motion.div
@@ -312,7 +312,6 @@ export default function ChatPage() {
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
                     <Sparkles className="w-8 h-8 text-white" />
                   </div>
-
                   <div className="text-center space-y-1">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">FinShop Asistanı</h2>
                     <p className="text-sm text-gray-400 dark:text-gray-500">Bütçene uygun en iyi ürünleri birlikte bulalım.</p>
@@ -343,6 +342,7 @@ export default function ChatPage() {
                 return null;
               })}
             </AnimatePresence>
+
             {sending && <TypingIndicator />}
             <div ref={bottomRef} />
           </div>
