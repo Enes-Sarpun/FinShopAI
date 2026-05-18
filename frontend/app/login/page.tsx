@@ -151,24 +151,52 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
    KAYIT FORMU
 ═══════════════════════════════════════ */
 function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
-  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
       await authApi.register(email, password, fullName);
-      await authApi.login(email, password);
-      router.push("/onboarding/personality");
+      setDone(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Kayıt başarısız");
     } finally { setLoading(false); }
+  }
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full px-10 py-12 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col items-center gap-5"
+        >
+          <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center">
+            <Mail className="w-8 h-8 text-indigo-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-gray-900">Mail kutunuzu kontrol edin</h2>
+            <p className="text-sm text-gray-500 leading-relaxed max-w-[260px]">
+              <span className="font-medium text-gray-700">{email}</span> adresine bir doğrulama linki gönderdik.
+              Linke tıkladıktan sonra otomatik olarak yönlendirileceksiniz.
+            </p>
+          </div>
+          <p className="text-xs text-gray-400">Mail gelmediyse spam klasörünü kontrol edin.</p>
+          <button onClick={onSwitch}
+            className="flex items-center gap-1.5 text-sm text-indigo-600 hover:underline font-medium mt-2">
+            <ArrowLeft className="w-3.5 h-3.5" /> Giriş sayfasına dön
+          </button>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
