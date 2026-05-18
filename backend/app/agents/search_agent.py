@@ -188,6 +188,7 @@ class SearchAgent(BaseAgent):
         occasion = occasion or parsed.get("occasion", "")
         gift_intent = parsed.get("gift_intent", False) or parsed.get("gift_context", False)
         inferred_categories = parsed.get("inferred_categories", [])
+        previously_shown: list[str] = input_data.get("previously_shown") or []
 
         # Spesifik marka+model mi (iPhone 15) yoksa genel/kategori mi (bütçeme uygun iPhone)?
         is_specific_product = parsed.get("is_specific_product", False)
@@ -325,6 +326,19 @@ class SearchAgent(BaseAgent):
                             self._search_google_shopping_sync, fallback_query, budget
                         )
                         products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
+
+        # Daha önce gösterilen ürünleri filtrele (aynı sohbette tekrar gelmemesi için)
+        if previously_shown:
+            shown_cf = [s.casefold() for s in previously_shown]
+            def _was_shown(p: dict) -> bool:
+                name_cf = (p.get("name") or "").casefold()
+                return any(_similarity(name_cf, s) >= 0.75 for s in shown_cf)
+            before_filter = len(products)
+            products = [p for p in products if not _was_shown(p)]
+            if before_filter != len(products):
+                self.logger.info(
+                    f"[search] previously_shown filtre: {before_filter} → {len(products)} ürün"
+                )
 
         # Karşılaştırma modunda: her ürün için ayrı arama yap
         if is_comparison and comparison_products and len(products) < 2:

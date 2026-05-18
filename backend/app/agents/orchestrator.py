@@ -286,12 +286,36 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
             if h.get("role") == "user" and h.get("message") != state["message"]
         ][:3]
 
+        # Daha önce önerilen ürün isimlerini topla — tekrar arama yapılınca aynı ürün gelmemesi için
+        previously_shown: list[str] = []
+        for h in history:
+            if h.get("role") != "assistant":
+                continue
+            import json as _json
+            meta = h.get("metadata") or {}
+            if isinstance(meta, str):
+                try:
+                    meta = _json.loads(meta)
+                except Exception:
+                    meta = {}
+            if meta.get("type") == "products":
+                payload = meta.get("payload") or {}
+                for p in (payload.get("products") or []):
+                    name = p.get("name", "")
+                    if name:
+                        previously_shown.append(name[:60])
+                for p in (payload.get("over_budget_products") or []):
+                    name = p.get("name", "")
+                    if name:
+                        previously_shown.append(name[:60])
+
         result = await SearchAgent(llm=llm, db=db).execute({
             "query": search_query,
             "budget": None,           # kullanıcının sorgusunda açık fiyat var mı — LLM parse eder
             "user_id": state["user_id"],
             "max_budget": available,
             "previous_queries": previous_queries,
+            "previously_shown": previously_shown[:15],
             "user_budget": budget_data.get("financial_metrics") or {},
             "personality": state.get("personality") or {},
             "is_comparison": state.get("is_comparison", False),

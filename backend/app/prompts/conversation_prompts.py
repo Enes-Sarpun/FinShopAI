@@ -94,9 +94,9 @@ QUICK_REPLIES = {
     "selamlama": [
         "Selam! Bugün ne arıyoruz? 🛍️",
         "Hey! Hoş geldin, anlat bakalım.",
-        "Selam! Sana nasıl yardımcı olabilirim?",
-        "Selam dostum! Hayırlı bir şey mi var?",
-        "Merhaba! Bütçene uygun harika ürünler bulmaya hazırım.",
+        "Selam! Ne aramak istersin?",
+        "Merhaba! Sana nasıl yardımcı olabilirim?",
+        "Merhaba! Bütçene uygun ürünler bulmana yardımcı olabilirim.",
     ],
     "tesekkur": [
         "Ne demek, kolay gelsin! 😊",

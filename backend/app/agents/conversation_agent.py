@@ -203,7 +203,7 @@ class ConversationAgent(BaseAgent):
             has_product_kw = any(kw in lower for kw in PRODUCT_KEYWORDS)
             intent = "PRODUCT_SEARCH" if has_product_kw else "CHITCHAT"
             confidence = 0.6
-            reply = None if intent == "PRODUCT_SEARCH" else "Anlıyorum! Nasıl yardımcı olabilirim?"
+            reply = None if intent == "PRODUCT_SEARCH" else random.choice(QUICK_REPLIES.get("tesekkur", ["Ne demek! 😊"]))
             comparison_products = []
             extracted_query = message if intent == "PRODUCT_SEARCH" else None
 

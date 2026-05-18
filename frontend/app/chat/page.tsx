@@ -84,6 +84,7 @@ export default function ChatPage() {
       const cached = loadFromStorage(key);
       if (cached && cached.length > 0) { setMessages(cached); return; }
 
+      paramHandled.current = true;
       chatApi.getThread(loadId).then((d: unknown) => {
         const data = d as { thread: { id: string; message: string; role: string; metadata?: Record<string, unknown> }[] };
         const thread = data.thread || [];
@@ -135,12 +136,13 @@ export default function ChatPage() {
     activeThreadId.current = null;
     const cached = loadFromStorage(storageKey(null));
     if (cached) setMessages(cached);
+    paramHandled.current = true;
     if (q) send(q);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, loadId, q]);
 
   useEffect(() => {
-    if (!hydrated || !paramHandled.current) return;
+    if (!hydrated) return;
     saveToStorage(storageKey(activeThreadId.current), messages);
   }, [messages, hydrated]);
 
