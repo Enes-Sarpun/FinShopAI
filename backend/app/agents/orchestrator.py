@@ -16,6 +16,7 @@ Intent → Pipeline eşlemesi:
 """
 
 import asyncio
+import json
 import re
 import time
 from typing import TypedDict, Optional
@@ -57,6 +58,7 @@ def clean_user_text(text: str) -> str:
 
 from langgraph.graph import StateGraph, END
 
+from app.core.config import settings
 from app.agents.budget_agent import BudgetAgent
 from app.agents.search_agent import SearchAgent
 from app.agents.review_agent import ReviewAgent
@@ -276,9 +278,10 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
     try:
         llm, db = get_services()
         budget_data = state.get("budget") or {}
-        available = None
-        if budget_data.get("success"):
-            available = budget_data.get("financial_metrics", {}).get("spendable_after_savings")
+        # success flag bağımsız olarak financial_metrics varsa kullan —
+        # BudgetAgent bazen success=False döndürse de metrics dolu olabilir
+        financial_metrics = budget_data.get("financial_metrics") or {}
+        available = financial_metrics.get("spendable_after_savings") or None
 
         history = state.get("chat_history") or []
         previous_queries = [
@@ -286,16 +289,14 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
             if h.get("role") == "user" and h.get("message") != state["message"]
         ][:3]
 
-        # Daha önce önerilen ürün isimlerini topla — tekrar arama yapılınca aynı ürün gelmemesi için
         previously_shown: list[str] = []
         for h in history:
             if h.get("role") != "assistant":
                 continue
-            import json as _json
             meta = h.get("metadata") or {}
             if isinstance(meta, str):
                 try:
-                    meta = _json.loads(meta)
+                    meta = json.loads(meta)
                 except Exception:
                     meta = {}
             if meta.get("type") == "products":
@@ -350,7 +351,7 @@ async def node_review(state: OrchestratorState) -> OrchestratorState:
     try:
         llm, db = get_services()
         agent = ReviewAgent(llm=llm, db=db)
-        products = (state.get("search") or {}).get("products", [])[:3]
+        products = (state.get("search") or {}).get("products", [])[:5]
 
         async def _review_one(p: dict) -> dict:
             result = await agent.execute({
@@ -536,8 +537,7 @@ async def run_orchestrator(
         "comparison_products": comparison_products or [],
         "personality": None, "budget": None, "search": None,
         "reviews": None, "recommendation": None, "watchlist_result": None,
-        # Önceden çekilen konuşmaya özgü geçmiş varsa kullan, yoksa node_prepare çeker
-        "chat_history": chat_history if chat_history is not None else None,
+        "chat_history": chat_history,
         "over_budget_products": None,
         "budget_exceeded_warning": None,
         "error": None,

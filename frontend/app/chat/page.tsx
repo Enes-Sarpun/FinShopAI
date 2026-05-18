@@ -56,6 +56,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [loadingThread, setLoadingThread] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
   // Aktif konuşmanın ID'si (backend metadata.conversation_id ile birebir).
   // URL'deki ?load=ID veya backend response'undan gelir.
@@ -82,8 +83,14 @@ export default function ChatPage() {
       activeThreadId.current = loadId;
       const key = storageKey(loadId);
       const cached = loadFromStorage(key);
-      if (cached && cached.length > 0) { setMessages(cached); return; }
+      if (cached && cached.length > 0) {
+        setMessages(cached);
+        setLoadingThread(false);
+        return;
+      }
 
+      setLoadingThread(true);
+      setMessages([]);
       paramHandled.current = true;
       chatApi.getThread(loadId).then((d: unknown) => {
         const data = d as { thread: { id: string; message: string; role: string; metadata?: Record<string, unknown> }[] };
@@ -128,6 +135,8 @@ export default function ChatPage() {
         }
       }).catch(() => {
         setMessages([{ role: "bot", text: "⚠️ Sohbet yüklenirken bir hata oluştu." }]);
+      }).finally(() => {
+        setLoadingThread(false);
       });
       return;
     }
@@ -305,50 +314,69 @@ export default function ChatPage() {
         {/* Mesajlar */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-            <AnimatePresence initial={false}>
-              {messages.map((msg, i) => {
-                if (msg.role === "user") return <UserBubble key={i} text={msg.text!} />;
-                if (msg.role === "bot") return <BotBubble key={i} text={msg.text!} budgetStatus={msg.budgetStatus} />;
-                if (msg.role === "products") return (
-                  <ProductsMessage key={i} products={msg.products!} overBudgetProducts={msg.overBudgetProducts ?? []} topPick={msg.topPick} advice={msg.advice} />
-                );
-                return null;
-              })}
-            </AnimatePresence>
+            {loadingThread ? (
+              <ThreadSkeleton />
+            ) : (
+              <AnimatePresence initial={false}>
+                {messages.map((msg, i) => {
+                  if (msg.role === "user") return <UserBubble key={i} text={msg.text!} />;
+                  if (msg.role === "bot") return <BotBubble key={i} text={msg.text!} budgetStatus={msg.budgetStatus} />;
+                  if (msg.role === "products") return (
+                    <ProductsMessage key={i} products={msg.products!} overBudgetProducts={msg.overBudgetProducts ?? []} topPick={msg.topPick} advice={msg.advice} />
+                  );
+                  return null;
+                })}
+              </AnimatePresence>
+            )}
             {sending && <TypingIndicator />}
             <div ref={bottomRef} />
           </div>
         </div>
 
-        {/* Input — glassmorphism */}
-        <div className="border-t border-white/60 dark:border-gray-700/60 px-4 py-4 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-end gap-3 bg-white/80 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-400 transition-all shadow-sm">
+        {/* Input */}
+        <div className="border-t border-white/40 dark:border-gray-700/40 px-4 py-5 flex-shrink-0" style={{ background: "var(--bg-mesh)" }}>
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 border border-white/60 dark:border-gray-600/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-400/60 focus-within:border-blue-400/60 transition-all shadow-sm" style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
               <textarea
                 ref={inputRef}
                 rows={1}
-                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 resize-none outline-none leading-relaxed"
-                placeholder="Bir şey sor..."
+                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400/80 resize-none outline-none leading-normal"
+                placeholder="Bugün ne arıyoruz? Ürün, bütçe, hediye... 🛍️"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={sending}
-                style={{ height: "auto", minHeight: "24px" }}
+                style={{ height: "auto", minHeight: "22px" }}
               />
               <button onClick={() => send(input)} disabled={!input.trim() || sending}
-                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all flex-shrink-0 mb-0.5 shadow-sm active:scale-95">
+                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all flex-shrink-0 shadow-sm active:scale-95">
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
             </div>
-            <div className="flex justify-center mt-2">
-              <p className="text-xs text-gray-400/70">
-                FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
-              </p>
-            </div>
-
+            <p className="text-center text-xs text-gray-400/60 mt-2">
+              FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
+            </p>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ThreadSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {[75, 55, 80, 45, 65].map((w, i) => (
+        <div key={i} className={`flex ${i % 2 === 0 ? "justify-start gap-3" : "justify-end"}`}>
+          {i % 2 === 0 && (
+            <div className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-gray-700 flex-shrink-0 mt-1" />
+          )}
+          <div
+            className="h-9 rounded-2xl bg-gray-200 dark:bg-gray-700"
+            style={{ width: `${w}%`, maxWidth: "75%" }}
+          />
+        </div>
+      ))}
     </div>
   );
 }

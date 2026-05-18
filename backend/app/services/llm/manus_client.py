@@ -29,10 +29,26 @@ logger = get_logger("manus_client")
 class ManusClient(BaseLLMClient):
 
     def __init__(self):
-        self.api_key = settings.MANUS_API_KEY
         self.base_url = settings.MANUS_BASE_URL.rstrip("/")
         self.timeout = settings.MANUS_TIMEOUT
         self.max_retries = settings.MANUS_MAX_RETRIES
+        self._key_idx = 0  # aktif key indeksi
+
+    @property
+    def api_key(self) -> str:
+        keys = settings.manus_api_keys
+        if not keys:
+            return ""
+        return keys[self._key_idx % len(keys)]
+
+    def _next_key(self) -> bool:
+        """Sonraki key'e geç. Tüm key'ler tükendiyse False döner."""
+        keys = settings.manus_api_keys
+        if self._key_idx + 1 >= len(keys):
+            return False
+        self._key_idx += 1
+        logger.warning(f"[manus] key_idx={self._key_idx} key'e geçiliyor ({len(keys)} key mevcut)")
+        return True
 
     @property
     def provider_name(self) -> str:
@@ -61,48 +77,60 @@ class ManusClient(BaseLLMClient):
         """
         task_prompt = self._build_research_prompt(query, budget_range, sources, max_results)
         t0 = time.monotonic()
+        keys = settings.manus_api_keys
+        total_keys = len(keys) if keys else 1
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                async with httpx.AsyncClient(
-                    base_url=self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=self.timeout,
-                ) as client:
-                    response = await client.post(
-                        "/api/v1/chat/completions",
-                        json={
-                            "model": "manus",
-                            "messages": [{"role": "user", "content": task_prompt}],
-                            "stream": False,
+        # Her key için en fazla max_retries deneme, quota/429 → sonraki key
+        for key_offset in range(total_keys):
+            for attempt in range(1, self.max_retries + 1):
+                try:
+                    async with httpx.AsyncClient(
+                        base_url=self.base_url,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
                         },
-                    )
-                    response.raise_for_status()
-                    duration = time.monotonic() - t0
-                    logger.info(
-                        f"[manus] research done | query={query[:50]} "
-                        f"| attempt={attempt} | {duration:.1f}s"
-                    )
-                    return self._parse_manus_response(response.json(), duration)
+                        timeout=self.timeout,
+                    ) as client:
+                        response = await client.post(
+                            "/api/v1/chat/completions",
+                            json={
+                                "model": "manus",
+                                "messages": [{"role": "user", "content": task_prompt}],
+                                "stream": False,
+                            },
+                        )
+                        response.raise_for_status()
+                        duration = time.monotonic() - t0
+                        logger.info(
+                            f"[manus] research done | query={query[:50]} "
+                            f"| key_idx={self._key_idx} | attempt={attempt} | {duration:.1f}s"
+                        )
+                        return self._parse_manus_response(response.json(), duration)
 
-            except httpx.TimeoutException:
-                logger.warning(f"[manus] timeout (attempt {attempt}/{self.max_retries})")
-                if attempt == self.max_retries:
-                    return {"error": "manus_timeout", "products": []}
-                await asyncio.sleep(2)
+                except httpx.TimeoutException:
+                    logger.warning(f"[manus] timeout (key_idx={self._key_idx} attempt {attempt}/{self.max_retries})")
+                    if attempt == self.max_retries:
+                        break
+                    await asyncio.sleep(2)
 
-            except httpx.HTTPStatusError as e:
-                logger.error(f"[manus] HTTP {e.response.status_code}: {e.response.text[:200]}")
-                return {"error": f"manus_http_{e.response.status_code}", "products": []}
+                except httpx.HTTPStatusError as e:
+                    status = e.response.status_code
+                    if status in (429, 402, 403):
+                        logger.warning(f"[manus] HTTP {status} — quota/limit, sonraki key'e geçiliyor")
+                        break  # bu key için denemeler bitti, sonraki key'e geç
+                    logger.error(f"[manus] HTTP {status}: {e.response.text[:200]}")
+                    return {"error": f"manus_http_{status}", "products": []}
 
-            except Exception as e:
-                logger.error(f"[manus] unexpected error (attempt {attempt}): {e}")
-                if attempt == self.max_retries:
-                    return {"error": str(e), "products": []}
-                await asyncio.sleep(2)
+                except Exception as e:
+                    logger.error(f"[manus] unexpected error (key_idx={self._key_idx} attempt {attempt}): {e}")
+                    if attempt == self.max_retries:
+                        break
+                    await asyncio.sleep(2)
+
+            # Bu key tükendi, sonrakine geç
+            if not self._next_key():
+                break
 
         return {"error": "manus_failed", "products": []}
 
