@@ -347,6 +347,25 @@ class SearchAgent(BaseAgent):
         if before != len(products):
             self.logger.info(f"Deduplicated: {before} → {len(products)} ürün")
 
+        # Spesifik ürün modunda over_budget zaten ayrıldı.
+        # Normal aramada budget varsa bütçeyi aşan ürünleri işaretle ve ayır.
+        if not is_specific_product and budget and not over_budget_products:
+            for p in products:
+                if p.get("price", 0) > budget:
+                    p["over_budget"] = True
+            over_budget_products = [p for p in products if p.get("over_budget")]
+            products = [p for p in products if not p.get("over_budget")]
+            if over_budget_products and not products:
+                min_price = min(
+                    (p["price"] for p in over_budget_products if p.get("price", 0) > 0),
+                    default=0,
+                )
+                budget_exceeded_warning = {
+                    "requested_query": search_query,
+                    "min_found_price": round(min_price),
+                    "user_budget": round(budget),
+                }
+
         top_products = products[:5]
         if top_products:
             reasons = await self._generate_reasons_batch(top_products, occasion, recipient)
