@@ -136,8 +136,11 @@ function ChatPageInner() {
     }
 
     activeThreadId.current = null;
-    const cached = loadFromStorage(storageKey(null));
-    if (cached) setMessages(cached);
+    if (!q) {
+      // Yeni sohbet — önceki session verisini temizle ve boş başla
+      try { sessionStorage.removeItem(storageKey(null)); } catch { }
+      setMessages([]);
+    }
     paramHandled.current = true;
     if (q) send(q);
   }, [hydrated, loadId, q]);
