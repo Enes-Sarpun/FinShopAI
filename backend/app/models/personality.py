@@ -1,9 +1,9 @@
 from pydantic import BaseModel
-from typing import Dict, List, Union
+from typing import Dict, List
 
 
 class PersonalitySubmitRequest(BaseModel):
-    answers: Dict[str, Union[int, float]]
+    answers: Dict[str, str]
 
 
 class PersonalityResponse(BaseModel):

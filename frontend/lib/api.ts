@@ -78,7 +78,7 @@ export const authApi = {
 export const personalityApi = {
   getQuestions: () => apiFetch<{ questions: unknown[]; total: number }>("/api/personality/questions"),
 
-  submit: (answers: Record<string, number>) =>
+  submit: (answers: Record<string, string>) =>
     apiFetch("/api/personality/submit", {
       method: "POST",
       body: JSON.stringify({ answers }),
