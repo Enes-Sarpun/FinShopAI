@@ -170,12 +170,12 @@ class SupabaseService:
             except Exception:
                 return None
 
-            result = (
+        result = (
             self.client.table("chat_history")
             .select("id, message, created_at, role, metadata")
             .eq("user_id", user_id)
             .eq("role", "user")
-            .order("created_at", desc=False)  # eskiden yeniye sırala
+            .order("created_at", desc=False)
             .limit(200)
             .execute()
         )
