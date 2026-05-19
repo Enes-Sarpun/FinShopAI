@@ -54,7 +54,17 @@ class SupabaseService:
         return result.data[0] if result.data else None
 
     async def upsert_budget(self, data: dict) -> dict:
-        result = self.client.table("budgets").upsert(data).execute()
+        user_id = data.get("user_id")
+        existing = await self.get_budget(user_id)
+        if existing:
+            result = (
+                self.client.table("budgets")
+                .update({k: v for k, v in data.items() if k != "user_id"})
+                .eq("user_id", user_id)
+                .execute()
+            )
+        else:
+            result = self.client.table("budgets").insert(data).execute()
         return result.data[0]
 
     async def add_expense(self, data: dict) -> dict:
