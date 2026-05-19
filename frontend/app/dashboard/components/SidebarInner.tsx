@@ -336,15 +336,24 @@ export default function SidebarInner({ userName, userEmail }: SidebarProps) {
   const loadId = searchParams?.get("load");
   useEffect(() => {
     if (!loadId) return;
-    const timer = setTimeout(() => {
+    // LLM başlık üretimi ~1-3sn sürebilir, iki kez çekerek güncellenmesini sağla
+    const t1 = setTimeout(() => {
       chatApi.getConversations(15)
         .then((d: unknown) => {
           const data = d as { history: ChatHistory[] };
           setHistory(data.history || []);
         })
         .catch(() => {});
-    }, 3000);
-    return () => clearTimeout(timer);
+    }, 2000);
+    const t2 = setTimeout(() => {
+      chatApi.getConversations(15)
+        .then((d: unknown) => {
+          const data = d as { history: ChatHistory[] };
+          setHistory(data.history || []);
+        })
+        .catch(() => {});
+    }, 6000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [loadId]);
 
   const handleDeleteHistoryItem = (id: string) => {
