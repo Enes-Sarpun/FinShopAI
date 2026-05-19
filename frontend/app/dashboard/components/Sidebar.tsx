@@ -27,6 +27,8 @@ interface ContentProps {
   history: ChatHistory[];
   onDeleteHistoryItem: (id: string) => void;
   onClose?: () => void;
+  activeLoadId?: string | null;
+  activePathname?: string | null;
 }
 
 function ThemeToggle({ collapsed }: { collapsed: boolean }) {
@@ -49,18 +51,18 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function ChatItem({ item, onDelete, onClose }: {
+function ChatItem({ item, onDelete, onClose, activeLoadId }: {
   item: ChatHistory;
   onDelete: (id: string) => void;
   onClose?: () => void;
+  activeLoadId?: string | null;
 }) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState((item.metadata?.title as string) || item.message);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const searchParams = useSearchParams();
-  const isActive = searchParams?.get("load") === item.id;
+  const isActive = activeLoadId === item.id;
 
   async function handleSave() {
     if (!title.trim() || title === ((item.metadata?.title as string) || item.message)) {
@@ -158,11 +160,10 @@ function ChatItem({ item, onDelete, onClose }: {
   );
 }
 
-function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onDeleteHistoryItem, onClose }: ContentProps) {
+function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history, onDeleteHistoryItem, onClose, activeLoadId, activePathname }: ContentProps) {
   const { t } = useTranslation();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const loadId = searchParams?.get("load");
+  const loadId = activeLoadId;
+  const pathname = activePathname;
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -246,7 +247,7 @@ function SidebarContent({ collapsed, setCollapsed, userName, userEmail, history,
               <p className="text-xs text-gray-400 dark:text-gray-500 px-2.5 py-2">{t("navigation.noChats")}</p>
             ) : (
               history.map((item) => (
-                <ChatItem key={item.id} item={item} onDelete={onDeleteHistoryItem} onClose={onClose} />
+                <ChatItem key={item.id} item={item} onDelete={onDeleteHistoryItem} onClose={onClose} activeLoadId={loadId} />
               ))
             )}
           </div>
@@ -330,8 +331,6 @@ function SidebarInner({ userName, userEmail }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [history, setHistory] = useState<ChatHistory[]>([]);
 
-  // Rota veya conversation_id değişince listeyi yenile
-  // (yeni sohbet oluşunca veya clearChat sonrası URL değişince otomatik güncellenir)
   useEffect(() => {
     chatApi.getConversations(15)
       .then((d: unknown) => {
@@ -341,8 +340,6 @@ function SidebarInner({ userName, userEmail }: SidebarProps) {
       .catch(() => {});
   }, [pathname, searchParams]);
 
-  // Yeni sohbette LLM başlık üretimi ~1-2sn sürer. Liste yüklendikten 3sn sonra
-  // bir kez daha çekerek başlığın görünmesini sağla.
   const loadId = searchParams?.get("load");
   useEffect(() => {
     if (!loadId) return;
@@ -377,6 +374,8 @@ function SidebarInner({ userName, userEmail }: SidebarProps) {
           userEmail={userEmail}
           history={history}
           onDeleteHistoryItem={handleDeleteHistoryItem}
+          activeLoadId={loadId}
+          activePathname={pathname}
         />
       </aside>
 
@@ -393,7 +392,6 @@ function SidebarInner({ userName, userEmail }: SidebarProps) {
       <AnimatePresence>
         {mobileOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
               initial={{ opacity: 0 }}
@@ -401,7 +399,6 @@ function SidebarInner({ userName, userEmail }: SidebarProps) {
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
             />
-            {/* Drawer panel */}
             <motion.aside
               className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[260px] flex flex-col
                 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl
@@ -419,6 +416,8 @@ function SidebarInner({ userName, userEmail }: SidebarProps) {
                 history={history}
                 onDeleteHistoryItem={handleDeleteHistoryItem}
                 onClose={() => setMobileOpen(false)}
+                activeLoadId={loadId}
+                activePathname={pathname}
               />
             </motion.aside>
           </>
