@@ -96,6 +96,18 @@
       "logoutDesc": "End your session"
     }
   },
+  "chat": {
+    "assistantName": "FinShop Assistant",
+    "online": "Online",
+    "deleteHistory": "Clear History",
+    "heroSubtitle": "Let's find the best products that fit your budget.",
+    "welcome": "Hi! I can help you find products that fit your budget 🛍️",
+    "placeholder": "What are you looking for? Product, budget, gift... 🛍️",
+    "disclaimer": "FinShop AI can make mistakes, please verify responses.",
+    "budgetMatches": "✓ Options within your budget ({{count}})",
+    "suggestions": ["Gift idea for dad", "Headphones under ₺500", "Best smartwatch", "Birthday gift idea"],
+    "overBudget": "⚠️ Over-budget options ({{count}})"
+  },
   "chatPreview": {
     "title": "FinShop Assistant",
     "clear": "Clear",

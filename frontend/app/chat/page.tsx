@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
 import { Send, Sparkles, ShoppingBag, Trash2, Star } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { wishlistService } from "@/lib/wishlistService";
@@ -27,9 +28,7 @@ interface Msg {
   budgetStatus?: string;
 }
 
-const WELCOME: Msg[] = [
-  { role: "bot", text: "Merhaba! Bütçene uygun ürünler bulmana yardım edebilirim 🛍️" },
-];
+const WELCOME: Msg[] = [];
 
 function loadFromStorage(key: string): Msg[] | null {
   if (typeof window === "undefined") return null;
@@ -48,6 +47,7 @@ function saveToStorage(key: string, msgs: Msg[]) {
 interface UserInfo { full_name?: string; email?: string; }
 
 function ChatPageInner() {
+  const { t } = useTranslation();
   const { loading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -274,23 +274,18 @@ function ChatPageInner() {
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">FinShop Asistanı</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t("chat.assistantName")}</p>
               <p className="text-xs text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
-                Çevrimiçi
+                {t("chat.online")}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={clearChat}
-              className="p-2 hover:bg-gray-100/80 dark:hover:bg-gray-700/50 rounded-xl transition-colors text-gray-400 hover:text-gray-600"
-              title="Bu sohbeti temizle">
-              <Trash2 className="w-4 h-4" />
-            </button>
             <button onClick={deleteHistory}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors border border-red-100 dark:border-red-900/40">
               <Trash2 className="w-3.5 h-3.5" />
-              Geçmişi Sil
+              {t("chat.deleteHistory")}
             </button>
           </div>
         </header>
@@ -300,7 +295,7 @@ function ChatPageInner() {
 
             {/* Welcome hero */}
             <AnimatePresence>
-              {messages.length <= 2 && messages.every(m => m.role === "bot") && !sending && (
+              {messages.length === 0 && !sending && !loadingThread && (
                 <motion.div
                   key="welcome-hero"
                   className="flex flex-col items-center justify-center py-12 gap-5"
@@ -313,12 +308,12 @@ function ChatPageInner() {
                     <Sparkles className="w-8 h-8 text-white" />
                   </div>
                   <div className="text-center space-y-1">
-                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">FinShop Asistanı</h2>
-                    <p className="text-sm text-gray-400 dark:text-gray-500">Bütçene uygun en iyi ürünleri birlikte bulalım.</p>
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t("chat.assistantName")}</h2>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">{t("chat.heroSubtitle")}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-2 justify-center max-w-sm">
-                    {["Babama hediye önerisi", "500₺ altı kulaklık", "En iyi akıllı saat", "Doğum günü hediyesi"].map((q) => (
+                    {(t("chat.suggestions", { returnObjects: true }) as string[]).map((q) => (
                       <button
                         key={q}
                         onClick={() => send(q)}
@@ -355,7 +350,7 @@ function ChatPageInner() {
                 ref={inputRef}
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400/80 resize-none outline-none leading-normal"
-                placeholder="Bugün ne arıyoruz? Ürün, bütçe, hediye... 🛍️"
+                placeholder={t("chat.placeholder")}
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
@@ -368,7 +363,7 @@ function ChatPageInner() {
               </button>
             </div>
             <p className="text-center text-xs text-gray-400/60 mt-2">
-              FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.
+              {t("chat.disclaimer")}
             </p>
           </div>
         </div>
@@ -534,6 +529,7 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
   topPick?: { product_name: string; reason: string; value_score: number } | null;
   advice?: string;
 }) {
+  const { t } = useTranslation();
   const hasAlternatives = products.length > 0;
   const hasOverBudget = (overBudgetProducts?.length ?? 0) > 0;
 
@@ -566,7 +562,7 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
         {hasAlternatives && (
           <div className="space-y-2">
             <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold px-1">
-              ✓ Bütçene uygun seçenekler ({products.length})
+              {t("chat.budgetMatches", { count: products.length })}
             </p>
             {products.map((product, i) => <ProductCard key={i} product={product} />)}
           </div>
@@ -576,7 +572,7 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1">
               <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
-                ⚠️ Bütçeni aşan ürünler ({overBudgetProducts!.length})
+                {t("chat.overBudget", { count: overBudgetProducts!.length })}
               </span>
             </div>
             {overBudgetProducts!.map((product, i) => (

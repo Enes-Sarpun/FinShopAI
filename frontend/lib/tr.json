@@ -96,6 +96,18 @@
       "logoutDesc": "Oturumu sonlandır"
     }
   },
+  "chat": {
+    "assistantName": "FinShop Asistanı",
+    "online": "Çevrimiçi",
+    "deleteHistory": "Geçmişi Sil",
+    "heroSubtitle": "Bütçene uygun en iyi ürünleri birlikte bulalım.",
+    "welcome": "Merhaba! Bütçene uygun ürünler bulmana yardım edebilirim 🛍️",
+    "placeholder": "Bugün ne arıyoruz? Ürün, bütçe, hediye... 🛍️",
+    "disclaimer": "FinShop AI hata yapabilir, yanıtlarını kontrol ediniz.",
+    "budgetMatches": "✓ Bütçene uygun seçenekler ({{count}})",
+    "suggestions": ["Babama hediye önerisi", "500₺ altı kulaklık", "En iyi akıllı saat", "Doğum günü hediyesi"],
+    "overBudget": "⚠️ Bütçeni aşan ürünler ({{count}})"
+  },
   "chatPreview": {
     "title": "FinShop Asistanı",
     "clear": "Temizle",
