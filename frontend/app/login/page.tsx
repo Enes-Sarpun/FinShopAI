@@ -83,8 +83,14 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      await authApi.login(email, password);
-      router.push("/dashboard");
+      const data = await authApi.login(email, password);
+      if (!data.has_personality) {
+        router.push("/onboarding/personality");
+      } else if (!data.has_budget) {
+        router.push("/onboarding/budget");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Giriş başarısız");
     } finally { setLoading(false); }

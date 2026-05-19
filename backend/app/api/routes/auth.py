@@ -36,6 +36,13 @@ async def register(body: RegisterRequest):
     if not result.user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Kayıt başarısız")
 
+    db = SupabaseService()
+    await db.upsert_profile({
+        "id": result.user.id,
+        "email": result.user.email,
+        "full_name": body.full_name,
+    })
+
     return {
         "message": "Kayıt başarılı. E-posta doğrulaması gerekebilir.",
         "user_id": result.user.id,
@@ -58,12 +65,19 @@ async def login(body: LoginRequest):
     if not result.session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Giriş başarısız")
 
+    db = SupabaseService()
+    user_id = result.user.id
+    personality = await db.get_personality(user_id)
+    budget = await db.get_budget(user_id)
+
     return {
         "access_token": result.session.access_token,
         "refresh_token": result.session.refresh_token,
         "token_type": "bearer",
-        "user_id": result.user.id,
+        "user_id": user_id,
         "email": result.user.email,
+        "has_personality": personality is not None,
+        "has_budget": budget is not None,
     }
 
 
