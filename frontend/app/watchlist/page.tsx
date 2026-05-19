@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+export const dynamic = "force-dynamic";
 import Sidebar from "@/app/dashboard/components/Sidebar";
 import WishlistWidget from "@/app/dashboard/components/WishlistWidget";
 import { useAuth } from "@/hooks/useAuth";
