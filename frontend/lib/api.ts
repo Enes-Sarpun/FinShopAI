@@ -27,7 +27,11 @@ export async function apiFetch<T = unknown>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Bir hata oluştu");
+    const detail = err.detail;
+    const message = Array.isArray(detail)
+      ? detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join(", ")
+      : detail || "Bir hata oluştu";
+    throw new Error(message);
   }
 
   return res.json();
