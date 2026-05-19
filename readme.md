@@ -48,7 +48,7 @@ Proje, güncel, yüksek performanslı ve ölçeklenebilir teknolojiler kullanıl
 ### ⚙️ Backend
 - **Framework:** FastAPI (Python)
 - **Veritabanı:** Supabase (PostgreSQL)
-- **AI & LLM:** Google Gemini API, LangChain, LangGraph
+- **AI & LLM:** Google Gemini API, LangChain, LangGraph , Manus API
 - **Arama Motoru Entegrasyonu:** SerpApi (google-search-results)
 - **Güvenlik & Auth:** JWT Authentication, passlib, python-jose, slowapi
 
@@ -133,7 +133,6 @@ pip install -r requirements.txt
 # Sunucuyu başlatın
 uvicorn app.main:app --reload
 ```
-Backend servisi `http://127.0.0.1:8000` adresinde çalışacaktır.
 
 ### 3️⃣ Frontend Kurulumu
 
@@ -151,7 +150,7 @@ npm install
 # Geliştirme sunucusunu başlatın
 npm run dev
 ```
-Frontend uygulaması `http://localhost:3000` adresinde çalışacaktır.
+İki ayrı terminalde backend ve frontend'i çalıştırarak http://localhost:3000 adresinde projemizi test edebilirsiniz.
 
 ---
 
