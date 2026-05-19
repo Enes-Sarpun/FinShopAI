@@ -1,30 +1,9 @@
-"""
-Orchestrator v2
-===============
-İYİLEŞTİRMELER:
-  1. Servis Singleton      — LLMService/SupabaseService bir kez oluşturulur
-  2. Paralel node_prepare  — personality + budget + history asyncio.gather
-  3. Timing metrikleri     — her node süresi timing dict'e kaydedilir
-  4. WatchlistAgent node   — 'takibe al' intent'i yakalanır
-  5. Intent-based routing  — koşullu kenarlarla gereksiz node'lar atlanır
-
-Intent → Pipeline eşlemesi:
-  product_search   → route → prepare → search → review → recommendation → END
-  quick_search     → route → search  → recommendation → END
-  budget_query     → route → budget_only → END
-  watchlist_action → route → watchlist → END
-"""
-
 import asyncio
 import json
 import re
 import time
 from typing import TypedDict, Optional
 
-
-# ================================================================
-# RESPONSE FILTER — Sistem metni sızıntısı önleme
-# ================================================================
 
 _INTERNAL_PATTERNS = [
     r"profil[ei]?\s+göre\s+\w+",
@@ -71,16 +50,11 @@ from app.core.logger import get_logger
 logger = get_logger("orchestrator")
 
 
-# ================================================================
-# 1. SERVİS SINGLETON
-# ================================================================
-
 _llm_instance: Optional[LLMService] = None
 _db_instance: Optional[SupabaseService] = None
 
 
 def get_services() -> tuple[LLMService, SupabaseService]:
-    """Per-process tek örnek — her node yeni nesne oluşturmaz."""
     global _llm_instance, _db_instance
     if _llm_instance is None:
         _llm_instance = LLMService()
@@ -90,10 +64,6 @@ def get_services() -> tuple[LLMService, SupabaseService]:
         logger.info("SupabaseService singleton oluşturuldu")
     return _llm_instance, _db_instance
 
-
-# ================================================================
-# 5. INTENT SINIFLANDIRICI
-# ================================================================
 
 _WATCHLIST_KW = [
     "takibe al", "takip et", "yıldızla", "favorile", "kaydet",
@@ -115,31 +85,19 @@ _CONV_TO_ORCH_INTENT = {
 
 
 def _classify_intent(message: str, conv_intent: str = None) -> str:
-    """
-    ConversationAgent'tan gelen LLM-tabanlı intent varsa onu kullan,
-    yoksa kural tabanlı fallback.
-    Döndürür: 'product_search' | 'quick_search' | 'budget_query' | 'watchlist_action'
-    """
-    # 1. ConversationAgent'tan gelen intent (LLM tabanlı, güvenilir)
+    # ConversationAgent LLM intent varsa kullan, yoksa kural-tabanlı fallback
     if conv_intent and conv_intent in _CONV_TO_ORCH_INTENT:
         mapped = _CONV_TO_ORCH_INTENT[conv_intent]
         logger.info(f"[route] ConversationAgent intent kullanılıyor: {conv_intent} → {mapped}")
         return mapped
 
-    # 2. Kural tabanlı fallback (ConversationAgent intent yoksa)
     lower = message.lower()
     if any(kw in lower for kw in _WATCHLIST_KW):
         return "watchlist_action"
     if any(kw in lower for kw in _BUDGET_KW):
         return "budget_query"
-    # Fallback: artık her zaman product_search — quick_search'ü kaldırıyoruz
-    # çünkü prepare node'u atlamak context kaybına yol açıyordu
     return "product_search"
 
-
-# ================================================================
-# STATE
-# ================================================================
 
 class OrchestratorState(TypedDict):
     user_id: str
@@ -165,13 +123,8 @@ class OrchestratorState(TypedDict):
     timing: dict                       # [v2]
 
 
-# ================================================================
-# NODE: Route  (5 — intent routing)
-# ================================================================
-
 async def node_route(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
-    # ConversationAgent'tan gelen LLM-tabanlı intent'i kullan, yoksa fallback
     intent = _classify_intent(state["message"], state.get("conv_intent"))
     elapsed = time.monotonic() - t0
     logger.info(
@@ -186,16 +139,9 @@ async def node_route(state: OrchestratorState) -> OrchestratorState:
     }
 
 
-# ================================================================
-# NODE: Prepare  (2 — paralel personality + budget + history)
-# ================================================================
-
 async def node_prepare(state: OrchestratorState) -> OrchestratorState:
-    """personality, budget, history — tek gather, yarı sürede."""
     t0 = time.monotonic()
     llm, db = get_services()
-
-    # chat_history zaten chat.py'de konuşmaya özgü olarak çekildiyse DB'ye gitme
     prefetched_history = state.get("chat_history")
     if prefetched_history is not None:
         logger.info(f"[prepare] history pre-fetched ({len(prefetched_history)} msgs), skipping DB | user={state['user_id']}")
@@ -236,12 +182,7 @@ async def node_prepare(state: OrchestratorState) -> OrchestratorState:
     }
 
 
-# ================================================================
-# NODE: Budget Only  (4 — budget_query intent)
-# ================================================================
-
 async def node_budget_only(state: OrchestratorState) -> OrchestratorState:
-    """Sadece bütçe sorguları — search/review/recommendation atlanır."""
     t0 = time.monotonic()
     llm, db = get_services()
     logger.info(f"[budget_only] user={state['user_id']}")
@@ -266,20 +207,13 @@ async def node_budget_only(state: OrchestratorState) -> OrchestratorState:
         return {**state, "budget": None, "error": str(e)}
 
 
-# ================================================================
-# NODE: Search
-# ================================================================
-
 async def node_search(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
-    # ConversationAgent'tan gelen temizlenmiş sorguyu kullan, yoksa ham mesaj
     search_query = state.get("extracted_query") or state["message"]
     logger.info(f"[search] query={search_query} | original={state['message'][:50]}")
     try:
         llm, db = get_services()
         budget_data = state.get("budget") or {}
-        # success flag bağımsız olarak financial_metrics varsa kullan —
-        # BudgetAgent bazen success=False döndürse de metrics dolu olabilir
         financial_metrics = budget_data.get("financial_metrics") or {}
         available = financial_metrics.get("spendable_after_savings") or None
 
@@ -341,10 +275,6 @@ async def node_search(state: OrchestratorState) -> OrchestratorState:
         return {**state, "search": None, "error": str(e)}
 
 
-# ================================================================
-# NODE: Review  (ilk 3 ürün paralel analiz edilir)
-# ================================================================
-
 async def node_review(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
     logger.info("[review] analyzing products")
@@ -377,10 +307,6 @@ async def node_review(state: OrchestratorState) -> OrchestratorState:
         return {**state, "reviews": [], "error": str(e)}
 
 
-# ================================================================
-# NODE: Recommendation
-# ================================================================
-
 async def node_recommendation(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
     logger.info("[recommendation] running")
@@ -412,10 +338,6 @@ async def node_recommendation(state: OrchestratorState) -> OrchestratorState:
         logger.error(f"[recommendation] error: {e}")
         return {**state, "recommendation": None, "error": str(e)}
 
-
-# ================================================================
-# NODE: Watchlist  (4 — watchlist_action intent)
-# ================================================================
 
 async def node_watchlist(state: OrchestratorState) -> OrchestratorState:
     t0 = time.monotonic()
@@ -455,12 +377,7 @@ async def node_watchlist(state: OrchestratorState) -> OrchestratorState:
         return {**state, "watchlist_result": None, "error": str(e)}
 
 
-# ================================================================
-# 5. ROUTING FONKSİYONLARI (Conditional Edges)
-# ================================================================
-
 def _route_after_route(state: OrchestratorState) -> str:
-    """node_route çıkışı — intent'e göre ilk hedef node."""
     return {
         "product_search":   "prepare",
         "budget_query":     "budget_only",
@@ -469,13 +386,8 @@ def _route_after_route(state: OrchestratorState) -> str:
 
 
 def _route_after_search(state: OrchestratorState) -> str:
-    """Arama sonrası review node'una geç."""
     return "review"
 
-
-# ================================================================
-# GRAPH
-# ================================================================
 
 def build_graph() -> StateGraph:
     g = StateGraph(OrchestratorState)
@@ -509,10 +421,6 @@ def build_graph() -> StateGraph:
 _graph = build_graph()
 
 
-# ================================================================
-# ANA FONKSİYON
-# ================================================================
-
 async def run_orchestrator(
     user_id: str,
     message: str,
@@ -522,7 +430,6 @@ async def run_orchestrator(
     comparison_products: list = None,
     chat_history: list = None,
 ) -> dict:
-    """Chat endpoint'inden çağrılır. ConversationAgent'tan gelen intent bilgisini kullanır."""
     t_total = time.monotonic()
     logger.info(
         f"Orchestrator v3 | user={user_id} | msg={message[:60]} "
@@ -554,7 +461,6 @@ async def run_orchestrator(
     )
 
     rec = final_state.get("recommendation") or {}
-    # Kullanıcıya giden metin alanlarını temizle
     if rec:
         for field in ("summary", "financial_advice"):
             if rec.get(field):

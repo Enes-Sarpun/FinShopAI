@@ -16,9 +16,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 class ChatRequest(BaseModel):
     message: str
-    # Mevcut sohbete devam ediliyorsa, o sohbetin ID'si (conversation_id).
-    # Yeni sohbet ise None gönderilir; backend ilk user mesajının id'sini
-    # conversation_id olarak atar ve frontend'e response'ta döner.
+    # Yeni sohbette None; backend ilk user mesajının id'sini conversation_id olarak atar.
     conversation_id: str | None = None
 
 
@@ -32,7 +30,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
         db = SupabaseService()
         llm = LLMService()
 
-        # ── Güvenlik kontrolü ─────────────────────────────────────────
         security_agent = SecurityAgent(llm=llm, db=db)
         sec_result = await security_agent.execute({
             "action_type": "check_content",
@@ -51,9 +48,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             if sec_result.get("clean_content"):
                 body = ChatRequest(message=sec_result["clean_content"], conversation_id=incoming_conversation_id)
 
-        # Mevcut konuşmaya ait geçmişi getir.
-        # Yeni sohbette (conversation_id yok) boş başla — önceki sohbetlerin
-        # bağlamı sızmasın (örn. eski ürün önerisinin "contextual reply" tetiklemesi).
+        # Yeni sohbette boş başla — önceki sohbet bağlamı sızmasın.
         if incoming_conversation_id:
             history = await db.get_chat_history_by_conversation(
                 user_id, incoming_conversation_id, limit=12
@@ -61,9 +56,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
         else:
             history = []
 
-        # Bütçe ile ilgili soru olabilecek mesajlarda önceden bütçeyi çek —
-        # ConversationAgent'ın BUDGET_QUERY yanıtı üretebilmesi için gerekli.
-        # Keyword kontrolü ucuz; LLM çağrısından önce yapılır.
         from app.agents.conversation_agent import BUDGET_KEYWORDS as _BUDGET_MSG_HINTS
         budget_info = None
         if any(hint in body.message.lower() for hint in _BUDGET_MSG_HINTS):
@@ -84,9 +76,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             "user_id": user_id,
         })
 
-        # Kullanıcı mesajını kaydet — conversation_id metadata'ya yazılır
-        # Yeni sohbet ise (incoming_conversation_id None), bu mesajın kendi id'si
-        # conversation_id olur. Mevcut sohbete devam ediliyorsa gelen ID kullanılır.
         user_metadata: dict = {"is_product_request": conv_result["is_product_request"]}
         if incoming_conversation_id:
             user_metadata["conversation_id"] = incoming_conversation_id
@@ -100,8 +89,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
         })
         user_msg_id = user_record.get("id") if user_record else None
 
-        # Yeni sohbetse, conversation_id = ilk user mesajının id'si olur ve
-        # metadata bu ID ile güncellenir (sidebar gruplaması için).
+        # Yeni sohbette conversation_id = ilk user mesajının id'si (sidebar gruplaması için).
         conversation_id = incoming_conversation_id or user_msg_id
         if not incoming_conversation_id and user_msg_id:
             try:
@@ -110,7 +98,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             except Exception:
                 pass
 
-            # Yeni sohbet: arka planda LLM ile kısa başlık üret (kritik yolu bloke etmez)
             async def _generate_title(msg_id: str, message: str, meta: dict):
                 try:
                     title_prompt = (
@@ -127,10 +114,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             import asyncio as _asyncio
             _asyncio.create_task(_generate_title(user_msg_id, body.message, user_metadata))
 
-        # ── SOHBET MODU ──────────────────────────────────────────
         if not conv_result["is_product_request"]:
-            # Fallback bağlam-duyarlı: önceki mesajlarda ürün önerildiyse jenerik
-            # "Nasıl yardımcı olabilirim?" yerine ürünlerle ilgili açık soru sor.
             fallback_reply = "Başka bir konuda yardımcı olabilir miyim?"
             if any(
                 (h.get("role") == "assistant"
@@ -171,8 +155,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "error": None,
             }
 
-        # ── ÜRÜN / INTENT MODU ────────────────────────────────────
-        # ConversationAgent'ın LLM ile tespit ettiği bilgileri Orchestrator'a aktar
         result = await run_orchestrator(
             user_id=user_id,
             message=body.message,
@@ -186,7 +168,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
         intent      = result.get("intent", "product_search")
         budget_data = result.get("budget_status")
 
-        # ── Watchlist action ─────────────────────────────────────
         if intent == "watchlist_action":
             wl = result.get("watchlist_result") or {}
             reply_text = wl.get("message") or "Takip listesi güncellendi."
@@ -208,7 +189,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "watchlist_result": wl, "error": result.get("error"),
             }
 
-        # ── Budget query ─────────────────────────────────────────
         if intent == "budget_query":
             budget = result.get("budget_status")
             status_messages = {
@@ -235,7 +215,6 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                 "recommendation": None, "error": result.get("error"),
             }
 
-        # ── Product search / quick_search ────────────────────────
         affordability_message = None
         if result.get("recommendation"):
             affordability_message = {
@@ -352,10 +331,6 @@ async def delete_single_conversation(
     conversation_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Tek bir sohbeti siler.
-    conversation_id: Sidebar'da listelenen sohbetin (ilk user mesajının) id'si.
-    O session'a ait tüm mesajlar (kullanıcı + asistan) silinir.
-    """
     user_id = current_user["sub"]
     try:
         db = SupabaseService()
@@ -393,10 +368,6 @@ async def get_thread(
     user_msg_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Belirli bir kullanıcı mesajına ait sohbet thread'ini döner.
-    Kullanıcı mesajı + asistan cevabını birlikte getirir.
-    """
     user_id = current_user["sub"]
     try:
         db = SupabaseService()

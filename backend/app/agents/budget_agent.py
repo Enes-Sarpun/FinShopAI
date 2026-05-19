@@ -1,20 +1,3 @@
-# app/agents/budget_agent.py
-
-"""
-Budget Agent - Bütçe Analizi ve Yönetimi
-==========================================
-
-Kullanıcıdan detaylı gelir/gider verisi alır,
-Supabase'e kaydeder, Personality verisiyle analiz yapar.
-
-Veri Akışı:
-1. Kullanıcı gelir/gider verilerini girer
-2. Budget Agent verileri alır ve toplar
-3. Supabase'e kaydeder (self.db.upsert_budget)
-4. Personality verisiyle kişiselleştirilmiş analiz yapar
-5. Sonuç döner
-"""
-
 import time
 
 from app.agents.base_agent import BaseAgent
@@ -46,29 +29,8 @@ class BudgetAgent(BaseAgent):
     
     def __init__(self, llm, db):
         super().__init__("budget_agent", llm, db)
-        # self.db BaseAgent'tan geliyor (PersonalityAgent gibi)
-    
-    
+
     async def execute(self, input_data: dict) -> dict:
-        """
-        input_data:
-            action: "save_and_analyze" | "analyze" | "add_expense" | "check_affordability"
-            user_id: str
-            
-            save_and_analyze için:
-                income_data: dict
-                expense_data: dict
-                savings_data: dict
-            
-            add_expense için:
-                category: str
-                amount: float
-                description: str (opsiyonel)
-            
-            check_affordability için:
-                amount: float
-        """
-        
         action = input_data.get("action", "save_and_analyze")
         user_id = input_data.get("user_id")
         
@@ -105,8 +67,6 @@ class BudgetAgent(BaseAgent):
             }
     
     
-    # ==================== 1. VERİ KAYDET VE ANALİZ ET ====================
-    
     async def save_and_analyze(
         self,
         user_id: str,
@@ -114,31 +74,20 @@ class BudgetAgent(BaseAgent):
         expense_data: dict,
         savings_data: dict
     ) -> dict:
-        """
-        Kullanıcının bütçe verilerini alır, Supabase'e kaydeder ve analiz eder.
-        """
-        
         try:
             self.log_action("Saving and analyzing budget", {"user_id": user_id})
             
-            # 1. Gelirleri topla
             income_summary = self._calculate_income(income_data)
-            
-            # 2. Giderleri topla ve grupla
             expense_summary = self._calculate_expenses(expense_data)
-            
-            # 3. Validasyon
             if income_summary["total_income"] <= 0:
                 raise ValueError("Gelir sıfırdan büyük olmalıdır")
             
-            # 4. Harcanabilir bütçe hesapla
             savings_goal = savings_data.get("savings_goal", 0) or 0
             available_budget = (
                 income_summary["total_income"] -
                 expense_summary["total_fixed_expenses"]
             )
             
-            # 5. Supabase'e kaydet (self.db - PersonalityAgent gibi!)
             record = {
                 "user_id": user_id,
                 "monthly_income": income_summary["total_income"],
@@ -156,7 +105,6 @@ class BudgetAgent(BaseAgent):
                 "total_expenses": expense_summary["total_fixed_expenses"]
             })
             
-            # 6. Personality verisiyle analiz yap
             analysis = await self.analyze_budget(user_id)
             
             return {
@@ -182,17 +130,10 @@ class BudgetAgent(BaseAgent):
             }
     
     
-    # ==================== 2. BÜTÇE ANALİZİ ====================
-    
     async def analyze_budget(self, user_id: str) -> dict:
-        """
-        Supabase'deki bütçeyi Personality verisiyle analiz et.
-        """
-        
         try:
             self.log_action("Analyzing budget", {"user_id": user_id})
             
-            # 1. Personality al (self.db - PersonalityAgent gibi!)
             personality = await self.db.get_personality(user_id)
             if not personality:
                 self.log_action("Personality bulunamadı, varsayılan profil kullanılıyor", {"user_id": user_id})
@@ -201,7 +142,6 @@ class BudgetAgent(BaseAgent):
             spending_type = personality.get("spending_type", "dengeli")
             risk_score = personality.get("risk_score", 5)
             
-            # 2. Bütçeyi al (self.db - PersonalityAgent gibi!)
             budget = await self.db.get_budget(user_id)
             if not budget:
                 raise Exception("Bütçe bulunamadı. Önce bütçe bilgilerini girin.")
@@ -211,14 +151,12 @@ class BudgetAgent(BaseAgent):
                 "income": budget.get("monthly_income")
             })
             
-            # 3. Matematiksel analiz
             budget_analysis = self._analyze_budget(
                 budget["monthly_income"],
                 budget["monthly_fixed_expenses"],
                 budget.get("savings_goal")
             )
             
-            # 4. Durum belirle
             available = budget_analysis["available_budget"]
             savings_goal = budget.get("savings_goal", 0) or 0
             
@@ -229,10 +167,7 @@ class BudgetAgent(BaseAgent):
             else:
                 status = "healthy"
             
-            # 5. Tavsiyeler
             savings_tips = self._get_savings_tips(spending_type, budget_analysis)
-
-            # 5b. Bu ay yapılan harcamalar — "harcanabilir" hesabına dahil edilir
             try:
                 month_spending = await self.db.get_current_month_expense_total(user_id)
             except Exception as e:
@@ -242,7 +177,6 @@ class BudgetAgent(BaseAgent):
             spendable_after_savings = available - savings_goal
             remaining_spendable = spendable_after_savings - month_spending
 
-            # 6. LLM analizi (cache'li — bütçe değişmediği sürece tekrar çağrılmaz)
             llm_analysis = await self._get_llm_analysis(
                 user_id=user_id,
                 budget=budget,
@@ -284,8 +218,6 @@ class BudgetAgent(BaseAgent):
             }
     
     
-    # ==================== 3. HARCAMA EKLE ====================
-    
     async def add_expense(
         self,
         user_id: str,
@@ -293,10 +225,6 @@ class BudgetAgent(BaseAgent):
         amount: float,
         description: str = None
     ) -> dict:
-        """
-        Gerçekleşen harcamayı Supabase'e kaydet.
-        """
-        
         try:
             self.log_action("Adding expense", {
                 "user_id": user_id,
@@ -314,7 +242,6 @@ class BudgetAgent(BaseAgent):
                 "description": description
             }
             
-            # self.db - PersonalityAgent gibi!
             saved = await self.db.add_expense(record)
             
             self.log_action("Expense added", {"expense_id": saved.get("id")})
@@ -338,43 +265,31 @@ class BudgetAgent(BaseAgent):
             }
     
     
-    # ==================== 4. UYGUNLUK KONTROL ====================
-    
     async def check_affordability(
         self,
         user_id: str,
         amount: float
     ) -> dict:
-        """
-        Belirli bir harcamayı yapıp yapamayacağını kontrol et.
-        Personality verisiyle kişiselleştirilmiş tavsiye verir.
-        """
-        
         try:
             self.log_action("Checking affordability", {
                 "user_id": user_id,
                 "amount": amount
             })
             
-            # Bütçeyi al (self.db - PersonalityAgent gibi!)
             budget = await self.db.get_budget(user_id)
             if not budget:
                 raise Exception("Bütçe bulunamadı")
-            
+
             available = budget["available_budget"]
             savings_goal = budget.get("savings_goal", 0) or 0
             spendable = available - savings_goal
-            
-            # Personality al (self.db - PersonalityAgent gibi!)
             personality = await self.db.get_personality(user_id)
             spending_type = personality.get("spending_type", "dengeli") if personality else "dengeli"
             
-            # Kontrol et
             is_affordable = amount <= spendable
             remaining = spendable - amount if is_affordable else 0
             spending_pct = (amount / spendable * 100) if spendable > 0 else 0
             
-            # Tavsiye
             if is_affordable:
                 if spending_pct <= 25:
                     recommendation = "✓ Rahat harcayabilirsiniz"
@@ -386,7 +301,6 @@ class BudgetAgent(BaseAgent):
                 deficit = amount - spendable
                 recommendation = f"✗ Bütçe yetersiz. ₺{deficit:.2f} eksik"
             
-            # Personality notu
             personality_note = ""
             if spending_type == "savruk" and is_affordable and spending_pct > 50:
                 personality_note = "⚠ Savruk harcayıcılar için yüksek risk!"
@@ -420,11 +334,7 @@ class BudgetAgent(BaseAgent):
             }
     
     
-    # ==================== HELPER METHODS ====================
-    
     def _calculate_income(self, income_data: dict) -> dict:
-        """Gelir verilerini topla"""
-        
         salary = float(income_data.get("salary", 0) or 0)
         extra = float(income_data.get("extra_income", 0) or 0)
         total = salary + extra
@@ -437,9 +347,6 @@ class BudgetAgent(BaseAgent):
     
     
     def _calculate_expenses(self, expense_data: dict) -> dict:
-        """Gider verilerini topla ve grupla"""
-        
-        # Sabit giderler
         fixed = {
             "rent": float(expense_data.get("rent", 0) or 0),
             "electricity": float(expense_data.get("electricity", 0) or 0),
@@ -451,8 +358,6 @@ class BudgetAgent(BaseAgent):
             "insurance": float(expense_data.get("insurance", 0) or 0),
             "other_fixed": float(expense_data.get("other_fixed", 0) or 0),
         }
-        
-        # Değişken giderler
         variable = {
             "groceries": float(expense_data.get("groceries", 0) or 0),
             "transportation": float(expense_data.get("transportation", 0) or 0),
@@ -482,8 +387,6 @@ class BudgetAgent(BaseAgent):
         fixed_expenses: float,
         savings_goal: float = None
     ) -> dict:
-        """Matematiksel bütçe analizi"""
-        
         available = monthly_income - fixed_expenses
         savings_goal = savings_goal or 0
         
@@ -512,25 +415,18 @@ class BudgetAgent(BaseAgent):
         fixed_expenses: float,
         savings_goal: float = None
     ) -> int:
-        """Bütçe sağlığı skoru (0-100)"""
-        
         if monthly_income == 0:
             return 0
         
         score = 0
         savings_goal = savings_goal or 0
-        
-        # 1. Sabit gider oranı (max 50 puan)
         expense_ratio = (fixed_expenses / monthly_income) * 100
-        
         if expense_ratio <= 30:
             score += 50
         elif expense_ratio <= 50:
             score += 30
         else:
             score += 10
-        
-        # 2. Tasarruf hedefi (max 50 puan)
         if savings_goal > 0:
             savings_ratio = (savings_goal / monthly_income) * 100
             

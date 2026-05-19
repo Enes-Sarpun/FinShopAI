@@ -80,7 +80,6 @@ export default function PersonalityPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="card w-full max-w-lg">
-        {/* Progress */}
         <div className="mb-6">
           <div className="flex justify-between text-sm text-gray-500 mb-2">
             <span>Kişilik Testi</span>

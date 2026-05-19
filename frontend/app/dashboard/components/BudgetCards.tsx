@@ -54,7 +54,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
     critical: t("budget.statusCritical"),
   };
 
-  // Eğer backend bu ay harcananı veriyorsa, gerçek "kalan harcanabilir"i göster
   const monthSpending = metrics.current_month_spending ?? 0;
   const remainingSpendable = metrics.remaining_spendable ?? metrics.spendable_after_savings;
   const overBudget = remainingSpendable < 0;
@@ -98,7 +97,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
     },
   ];
 
-  // Multi-segment bar: Sabit gider + bu ay yapılan harcamalar (variable) + tasarruf + kalan
   const income = metrics.total_income || 1;
   const expensePct = Math.min((metrics.fixed_expenses / income) * 100, 100);
   const variableSpentPct = Math.min((monthSpending / income) * 100, Math.max(0, 100 - expensePct));
@@ -115,7 +113,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
 
   return (
     <div className="space-y-4">
-      {/* Özet Kartlar */}
       <motion.div
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
         variants={container}
@@ -146,7 +143,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
         })}
       </motion.div>
 
-      {/* Bütçe Sağlığı */}
       <motion.div
         className="card"
         initial={{ opacity: 0, y: 16 }}
@@ -161,7 +157,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
           </span>
         </div>
 
-        {/* Multi-segment bar */}
         <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-4 overflow-hidden flex">
           <motion.div
             className="bg-gradient-to-r from-red-400 to-red-500 h-4 rounded-l-full"
@@ -195,7 +190,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
           />
         </div>
 
-        {/* Legend */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
           <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
             <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" />
@@ -217,7 +211,6 @@ export default function BudgetCards({ budget }: BudgetCardsProps) {
           </span>
         </div>
 
-        {/* Extra metrics row */}
         <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
           <div className="text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{t("budget.availableBudget")}</p>

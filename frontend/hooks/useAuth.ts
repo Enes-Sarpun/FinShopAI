@@ -9,7 +9,6 @@ export function useAuth(redirectIfNoToken = true) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // localStorage sadece client-side'da erişilebilir
     const t = localStorage.getItem("access_token");
     const uid = localStorage.getItem("user_id");
 

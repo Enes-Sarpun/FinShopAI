@@ -15,7 +15,6 @@ interface ExpenseTrackerProps {
   userId: string;
   monthSpending: number;
   remainingSpendable: number;
-  /** Modal kayıt başarılı olduğunda dashboard verilerini yenilemek için */
   onChange: () => Promise<void> | void;
 }
 
@@ -89,7 +88,6 @@ export default function ExpenseTracker({
       throw new Error(res.error || t("expense.error"));
     }
 
-    // Anında local listeye ekle (optimistic UX) — sonra zaten reload edeceğiz
     const optimistic: Expense = {
       id: res.expense_id ?? `tmp-${Date.now()}`,
       user_id: userId,
@@ -100,7 +98,6 @@ export default function ExpenseTracker({
     };
     setItems((prev) => [optimistic, ...prev].slice(0, 5));
 
-    // Toast + Undo
     const expenseId = res.expense_id;
     toast.success(
       (toastObj) => (
@@ -129,14 +126,11 @@ export default function ExpenseTracker({
       { duration: 5000 }
     );
 
-    // Üst component dashboard'u tazelesin (metrikler değişti)
     await onChange();
-    // Listemizi de tazele
     loadRecent();
   }
 
   async function handleDelete(expense: Expense) {
-    // Optimistic
     setItems((prev) => prev.filter((i) => i.id !== expense.id));
     try {
       await budgetApi.deleteExpense(expense.id);
@@ -144,7 +138,6 @@ export default function ExpenseTracker({
       await onChange();
     } catch {
       toast.error(t("expense.removeFailed"));
-      // Geri ekle
       loadRecent();
     }
   }
@@ -154,7 +147,6 @@ export default function ExpenseTracker({
   return (
     <>
       <div className="card">
-        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
@@ -173,7 +165,6 @@ export default function ExpenseTracker({
           </button>
         </div>
 
-        {/* Özet — Bu ay harcanan / Kalan harcanabilir */}
         <div className="grid grid-cols-2 gap-2.5 mb-4">
           <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-3">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t("expense.spentThisMonth")}</p>
@@ -199,7 +190,6 @@ export default function ExpenseTracker({
           </div>
         )}
 
-        {/* Liste */}
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (

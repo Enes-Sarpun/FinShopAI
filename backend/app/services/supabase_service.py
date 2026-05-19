@@ -62,7 +62,6 @@ class SupabaseService:
         return result.data[0]
 
     async def get_recent_expenses(self, user_id: str, limit: int = 10) -> list:
-        """Kullanıcının en son eklediği harcamaları döner."""
         result = (
             self.client.table("expenses")
             .select("*")
@@ -74,7 +73,6 @@ class SupabaseService:
         return result.data or []
 
     async def get_current_month_expense_total(self, user_id: str) -> float:
-        """Bu ay (UTC) eklenen harcamaların toplamını döner."""
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -89,7 +87,6 @@ class SupabaseService:
         return float(sum((r.get("amount") or 0) for r in rows))
 
     async def get_expense(self, user_id: str, expense_id: str) -> dict | None:
-        """Tek bir harcama kaydını döner (sahiplik kontrolü için)."""
         result = (
             self.client.table("expenses")
             .select("*")
@@ -101,7 +98,6 @@ class SupabaseService:
         return result.data[0] if result.data else None
 
     async def delete_expense(self, user_id: str, expense_id: str) -> None:
-        """Bir harcama kaydını siler (sahiplik doğrulamasıyla)."""
         self.client.table("expenses").delete().eq(
             "id", expense_id
         ).eq("user_id", user_id).execute()
@@ -145,7 +141,6 @@ class SupabaseService:
     async def get_chat_history_by_conversation(
         self, user_id: str, conversation_id: str, limit: int = 20
     ) -> list:
-        """Belirli bir konuşmaya ait mesajları döner (conversation_id filtreli)."""
         result = (
             self.client.table("chat_history")
             .select("*")
@@ -175,8 +170,7 @@ class SupabaseService:
             except Exception:
                 return None
 
-        # En son 200 user mesajını çek (yeterli veri için)
-        result = (
+            result = (
             self.client.table("chat_history")
             .select("id, message, created_at, role, metadata")
             .eq("user_id", user_id)
@@ -190,9 +184,7 @@ class SupabaseService:
             return []
 
         session_gap = timedelta(minutes=30)
-        # Her conversation'ın ilk user mesajını saklayacağımız haritalar:
         first_by_conv: dict[str, dict] = {}
-        # Eski (metadata'sı olmayan) mesajlar için zaman bazlı fallback grupları
         legacy_sessions: list[dict] = []
         last_legacy_time: datetime | None = None
 
@@ -205,20 +197,14 @@ class SupabaseService:
             conv_id = metadata.get("conversation_id") if isinstance(metadata, dict) else None
 
             if conv_id:
-                # Yeni format: doğrudan conversation_id ile grupla.
                 if conv_id not in first_by_conv:
                     first_by_conv[conv_id] = msg
-                # Bu mesaj fallback zincirini de bozabilir; legacy timeline'ı
-                # sıfırla ki sonradan gelen eski (metadata'sız) mesajlar
-                # bu yeni mesajla aynı 30-dk içinde diye birleşmesin.
                 last_legacy_time = ts
             else:
-                # Legacy: 30 dakika gap mantığı
                 if last_legacy_time is None or (ts - last_legacy_time) > session_gap:
                     legacy_sessions.append(msg)
                 last_legacy_time = ts
 
-        # Her iki grubu birleştir, en yeni üstte olacak şekilde sırala
         combined = list(first_by_conv.values()) + legacy_sessions
         combined.sort(
             key=lambda m: parse_ts(m["created_at"]) or datetime.min,
@@ -230,12 +216,6 @@ class SupabaseService:
         self.client.table("chat_history").delete().eq("user_id", user_id).execute()
 
     async def delete_chat_session(self, user_id: str, first_msg_id: str) -> int:
-        """Tek bir sohbeti (session) siler.
-        first_msg_id: o session'ın ilk kullanıcı mesajının ID'si.
-        get_session_messages ile aynı mantık (30 dk pencere) kullanılır,
-        böylece sidebar'da gösterilen sohbet ile birebir aynı mesajlar silinir.
-        Geriye silinen kayıt sayısı döner.
-        """
         messages = await self.get_session_messages(user_id, first_msg_id)
         if not messages:
             return 0
@@ -248,13 +228,11 @@ class SupabaseService:
         return len(ids)
 
     async def update_avatar(self, user_id: str, avatar_url: str | None) -> None:
-        """Kullanıcının profil fotoğrafını günceller (base64 data URL veya None)."""
         self.client.table("profiles").update(
             {"avatar_url": avatar_url}
         ).eq("id", user_id).execute()
 
     async def update_chat_title(self, chat_id: str, user_id: str, title: str) -> None:
-        """Sohbet başlığını metadata içinde günceller."""
         result = self.client.table("chat_history").select("metadata").eq("id", chat_id).eq("user_id", user_id).single().execute()
         if not result.data:
             return
@@ -265,11 +243,10 @@ class SupabaseService:
         self.client.table("chat_history").update({"metadata": metadata}).eq("id", chat_id).eq("user_id", user_id).execute()
 
     async def update_chat_metadata(self, chat_id: str, user_id: str, metadata: dict) -> None:
-        """Bir chat_history satırının metadata alanını tamamen değiştirir."""
         self.client.table("chat_history").update({"metadata": metadata}).eq("id", chat_id).eq("user_id", user_id).execute()
 
     async def get_chat_thread(self, user_id: str, user_msg_id: str) -> list:
-        """Eski endpoint - geriye dönük uyumluluk için bırakıldı."""
+        """Geriye dönük uyumluluk için bırakıldı."""
         return await self.get_session_messages(user_id, user_msg_id)
 
     async def get_session_messages(self, user_id: str, first_msg_id: str) -> list:
@@ -292,7 +269,6 @@ class SupabaseService:
             except Exception:
                 return None
 
-        # Önce hedef mesajı kendisi sorgula — büyük tabloda tek satır lookup hızlıdır.
         target_resp = (
             self.client.table("chat_history")
             .select("*")
@@ -309,11 +285,7 @@ class SupabaseService:
         target_meta = target.get("metadata") or {}
         target_conv_id = target_meta.get("conversation_id") if isinstance(target_meta, dict) else None
 
-        # ── 1) Yeni format: conversation_id eşleşmesi ──
         if target_conv_id:
-            # Kullanıcının metadata.conversation_id'si target_conv_id olan veya
-            # mesajın kendi id'si target_conv_id olan tüm satırları çek.
-            # Supabase PostgREST JSON filter: metadata->>conversation_id=eq.<id>
             try:
                 resp_meta = (
                     self.client.table("chat_history")
@@ -327,8 +299,7 @@ class SupabaseService:
             except Exception:
                 msgs_meta = []
 
-            # İlk user mesajı (conversation root) bazen metadata olmadan kayıt
-            # edilmiş olabilir (özellikle migration öncesi). Onu da ekleyelim.
+            # İlk user mesajı migration öncesi metadata'sız kaydedilmiş olabilir.
             ids_in_set = {m["id"] for m in msgs_meta}
             if target["id"] not in ids_in_set:
                 msgs_meta.insert(0, target)
@@ -337,7 +308,6 @@ class SupabaseService:
             msgs_meta.sort(key=lambda m: parse_ts(m["created_at"]) or datetime.min)
             return msgs_meta
 
-        # ── 2) Legacy: 30-dakika zaman penceresi ──
         start_ts = parse_ts(target["created_at"])
         if start_ts is None:
             return [target]
@@ -372,10 +342,7 @@ class SupabaseService:
         )
         return result.data or []
 
-    # ── Watchlist ────────────────────────────────────────────────────────────
-
     async def get_watchlist(self, user_id: str) -> list:
-        """Kullanıcının aktif takip listesini döner."""
         result = (
             self.client.table("watchlist")
             .select("*")
@@ -387,31 +354,24 @@ class SupabaseService:
         return result.data or []
 
     async def add_to_watchlist(self, data: dict) -> dict:
-        """Takip listesine yeni ürün ekler."""
         result = self.client.table("watchlist").insert(data).execute()
         return result.data[0]
 
     async def update_watchlist_item(self, watchlist_id: str, data: dict) -> None:
-        """Takip listesi kaydını günceller (fiyat, tarih vb.)."""
         self.client.table("watchlist").update(data).eq("id", watchlist_id).execute()
 
     async def deactivate_watchlist_item(self, user_id: str, watchlist_id: str) -> None:
-        """Takip listesi kaydını soft-delete yapar (is_active=False)."""
         self.client.table("watchlist").update({"is_active": False}).eq(
             "id", watchlist_id
         ).eq("user_id", user_id).execute()
 
-    # ── Notifications ────────────────────────────────────────────────────────
-
     async def create_notification(self, data: dict) -> dict:
-        """Yeni bildirim kaydı oluşturur."""
         result = self.client.table("notifications").insert(data).execute()
         return result.data[0]
 
     async def get_notifications(
         self, user_id: str, limit: int = 20, unread_only: bool = False
     ) -> list:
-        """Kullanıcının bildirimlerini döner."""
         q = (
             self.client.table("notifications")
             .select("*")
@@ -425,19 +385,16 @@ class SupabaseService:
         return result.data or []
 
     async def mark_notification_read(self, user_id: str, notification_id: str) -> None:
-        """Bir bildirimi okundu yapar."""
         self.client.table("notifications").update({"is_read": True}).eq(
             "id", notification_id
         ).eq("user_id", user_id).execute()
 
     async def mark_all_notifications_read(self, user_id: str) -> None:
-        """Kullanıcının tüm bildirimlerini okundu yapar."""
         self.client.table("notifications").update({"is_read": True}).eq(
             "user_id", user_id
         ).eq("is_read", False).execute()
 
     async def get_unread_notification_count(self, user_id: str) -> int:
-        """Okunmamış bildirim sayısını döner."""
         result = (
             self.client.table("notifications")
             .select("id", count="exact")

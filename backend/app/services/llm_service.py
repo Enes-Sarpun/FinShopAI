@@ -1,12 +1,3 @@
-"""
-LLM Service — Geliştirilmiş Sürüm
-=====================================
-- asyncio.to_thread: Blocking Gemini call'ları async wrapper içinde
-- Exponential backoff retry (3 deneme)
-- Token count logging
-- JSON parse robustluğu
-"""
-
 import asyncio
 import json
 import time
@@ -63,13 +54,10 @@ class LLMService:
             raise RuntimeError("Hiç geçerli GEMINI_API_KEY bulunamadı.")
         logger.info(f"LLMService başlatıldı | {len(keys)} Gemini key mevcut | model={settings.GEMINI_MODEL}")
 
-    # ── Ana üretim metodu ────────────────────────────────────────────────────
     async def generate(self, prompt: str, system: str = None) -> str:
         global _current_key_idx
         keys = settings.gemini_api_keys
         last_error = None
-
-        # Her key'i en fazla bir kez dene; quota hatası → sonraki key
         for offset in range(len(keys)):
             idx = (_current_key_idx + offset) % len(keys)
             api_key = keys[idx]
@@ -91,7 +79,6 @@ class LLMService:
                 else:
                     logger.debug(f"LLM call done | key_idx={idx} | elapsed={elapsed:.0f}ms")
 
-                # Başarılı — key indeksini bu key'de bırak
                 _current_key_idx = idx
                 return response.text
 
@@ -105,7 +92,6 @@ class LLMService:
                     _current_key_idx = (idx + 1) % len(keys)
                     continue
                 else:
-                    # Quota olmayan hata: exponential backoff ile aynı key'de yeniden dene
                     for attempt in range(1, 3):
                         delay = _BASE_DELAY * (2 ** (attempt - 1))
                         logger.warning(f"LLM error (attempt {attempt}/2), retrying in {delay:.1f}s: {e}")
@@ -120,12 +106,10 @@ class LLMService:
 
         raise last_error  # type: ignore[misc]
 
-    # ── JSON üretimi ─────────────────────────────────────────────────────────
     async def generate_json(self, prompt: str, system: str = None) -> dict:
         text = await self.generate(prompt, system)
         return self._parse_json_safe(text)
 
-    # ── JSON parse yardımcısı ─────────────────────────────────────────────────
     @staticmethod
     def _parse_json_safe(text: str) -> dict:
         text = text.strip()

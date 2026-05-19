@@ -57,7 +57,6 @@ export default function SavingsTips({ tips, personality }: SavingsTipsProps) {
 
   return (
     <div className="space-y-4">
-      {/* Kişilik Profili */}
       {personality && (
         <motion.div {...fadeUp(0)} className={`card border-l-4 ${style.accent}`}>
           <div className="flex items-center justify-between mb-3">
@@ -94,7 +93,6 @@ export default function SavingsTips({ tips, personality }: SavingsTipsProps) {
         </motion.div>
       )}
 
-      {/* Tasarruf Önerileri — individual cards */}
       {tips.length > 0 && (
         <motion.div {...fadeUp(0.1)} className="card">
           <div className="flex items-center gap-2 mb-4">

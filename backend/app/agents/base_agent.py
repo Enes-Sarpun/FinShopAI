@@ -1,11 +1,3 @@
-"""
-Base Agent — Geliştirilmiş Sürüm
-===================================
-- log_action syntax düzeltildi
-- Execution timing (ms) eklendi
-- call_llm_with_retry yardımcısı eklendi
-"""
-
 import time
 from abc import ABC, abstractmethod
 from app.services.llm_service import LLMService
@@ -23,8 +15,6 @@ class BaseAgent(ABC):
     @abstractmethod
     async def execute(self, input_data: dict) -> dict:
         raise NotImplementedError
-
-    # ── LLM çağrı yardımcıları ─────────────────────────────────────────────
 
     async def call_llm(self, prompt: str, system: str = None) -> str:
         try:
@@ -47,16 +37,12 @@ class BaseAgent(ABC):
             self.logger.error(f"LLM JSON error: {e}")
             raise
 
-    # ── Loglama yardımcısı (düzeltilmiş syntax) ────────────────────────────
-
     def log_action(self, action: str, data: dict = None):
         if data:
             details = " | ".join(f"{k}={v}" for k, v in data.items())
             self.logger.info(f"{action} | {details}")
         else:
             self.logger.info(action)
-
-    # ── Timing yardımcısı ──────────────────────────────────────────────────
 
     def start_timer(self) -> float:
         return time.monotonic()

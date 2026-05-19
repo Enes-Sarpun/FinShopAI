@@ -1,16 +1,8 @@
 "use client";
-/**
- * Wishlist Service — Mock + Real API toggle
- * USE_MOCK=true → localStorage'da çalışır (backend hazır olmadan)
- * USE_MOCK=false → watchlistApi (lib/api.ts) ile gerçek backend
- */
-
 import { watchlistApi } from "@/lib/api";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 const STORAGE_KEY = "finshop_wishlist";
-
-// ── Tipler ──────────────────────────────────────────────────────────────────
 
 export interface WishlistItem {
   id: string;
@@ -40,8 +32,6 @@ export interface WishlistNotification {
   created_at: string;
 }
 
-// ── Mock helpers ─────────────────────────────────────────────────────────────
-
 function getMockItems(): WishlistItem[] {
   if (typeof window === "undefined") return [];
   try {
@@ -53,8 +43,6 @@ function getMockItems(): WishlistItem[] {
 function saveMockItems(items: WishlistItem[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch {}
 }
-
-// ── Service ──────────────────────────────────────────────────────────────────
 
 export const wishlistService = {
   async getAll(): Promise<WishlistItem[]> {

@@ -1,30 +1,3 @@
-"""
-Conversation Agent — v3 (Bağlam Farkındalığı)
-Intent-aware conversation management with follow-up memory:
-  - PRODUCT_SEARCH  → Orchestrator'a yönlendir
-  - COMPARISON      → Karşılaştırma modunda orchestrator
-  - BUDGET_QUERY    → Bütçe bilgisini getir ve yanıtla
-  - COMPLAINT       → Empati + yeniden deneme teklifi
-  - GREETING        → Hızlı selamlama (LLM çağrısı yok)
-  - CHITCHAT        → Hızlı yanıt veya kısa LLM çağrısı
-  - FOLLOW_UP       → Önceki ürün aramasını rafine et (v3)
-
-v3 Değişiklikleri:
-  - Sohbet bağlamı farkındalığı: önceki ürün önerileri hatırlanır
-  - "Ben erkeğim" gibi takip mesajları önceki arama ile birleştirilir
-  - "Teşekkürler" sonrası bağlamsal yanıt (ürün sonrası vs genel)
-  - Enriched history: [N ürün bulundu] yerine gerçek ürün isimleri
-
-execute() çıktısı:
-  intent:            str (yukarıdaki sınıflardan biri)
-  confidence:        float (0-1)
-  is_product_request: bool (PRODUCT_SEARCH, COMPARISON veya FOLLOW_UP → True)
-  is_comparison:     bool
-  comparison_products: list[str]  (ürün isimleri, COMPARISON ise dolu)
-  extracted_query:   str | None   (temizlenmiş arama sorgusu)
-  reply:             str | None   (sohbet yanıtı; ürün isteğinde None)
-"""
-
 import time
 import json
 import random
@@ -38,13 +11,11 @@ from app.prompts.conversation_prompts import (
     COMPLAINT_REPLY_PROMPT,
 )
 
-# Hızlı yol için sadece selamlama kelimeleri (LLM çağrısı yapılmaz)
 GREETING_WORDS = {
     "merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar",
     "hey", "hi", "hello",
 }
 
-# Hal hatır soruları — ayrı hızlı yanıt havuzu
 HOWRU_WORDS = {"naber", "nasılsın", "nasıl gidiyor", "ne haber", "iyi misin"}
 HOWRU_REPLIES = [
     "İyiyim, teşekkürler! 😊 Sen nasılsın? Bugün ne arıyoruz?",
@@ -52,7 +23,6 @@ HOWRU_REPLIES = [
     "Çok iyiyim, teşekkürler! Bugün bir şeyler mi arıyoruz?",
 ]
 
-# Bütçe sorgusu keyword'leri — hızlı yol için (LLM'den önce kontrol edilir)
 BUDGET_KEYWORDS = [
     "bütçem", "bütçemi", "bütçemde", "bütçeme", "bütçemle",
     "bütçeni görebilir", "bütçemi görebilir", "bütçeyi görebilir",
@@ -61,7 +31,6 @@ BUDGET_KEYWORDS = [
     "ne kadar param", "bütçem ne",
 ]
 
-# Fallback keyword listesi — sadece LLM hata verirse kullanılır
 PRODUCT_KEYWORDS = [
     "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
     "ucuz", "fiyat", "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
@@ -71,11 +40,6 @@ PRODUCT_KEYWORDS = [
 ]
 
 def _coerce_metadata(meta) -> dict:
-    """
-    Supabase'den gelen `metadata` çoğu zaman dict olur ama bazı
-    sürücüler/durumlarda JSON string olarak dönebilir. Tek tip dict
-    döndürmek için normalize ederiz.
-    """
     if isinstance(meta, dict):
         return meta
     if isinstance(meta, str) and meta.strip():
@@ -87,23 +51,16 @@ def _coerce_metadata(meta) -> dict:
     return {}
 
 
-# Cinsiyet / refinement ön-yakalama kalıpları
 GENDER_MALE_HINTS = {"erkeğim", "erkek", "bay", "oğlan", "adamım"}
 GENDER_FEMALE_HINTS = {"kadınım", "kadın", "bayan", "kız", "hanımım"}
 
 
 def _tokenize(message: str) -> set[str]:
-    """Mesajı küçük harfli kelime kümesine çevir (basit Türkçe-uyumlu)."""
     import re
     return set(re.findall(r"[a-zçğıöşüâîû]+", message.lower()))
 
 
 def _has_gender_hint(message: str) -> str | None:
-    """
-    Mesajda kullanıcı kendi cinsiyetini belirtiyor mu? 'male'/'female'/None.
-    Token-tabanlı + Türkçe iyelik eki ('-ım/-im/-um/-üm') toleransı:
-      'bayan' → eşleşir,  'bayanım' → eşleşir,  'erkekçocuğu' → eşleşmez.
-    """
     tokens = _tokenize(message)
     male_stems = {h for h in GENDER_MALE_HINTS}
     female_stems = {h for h in GENDER_FEMALE_HINTS}
@@ -126,7 +83,6 @@ def _has_gender_hint(message: str) -> str | None:
 
 
 def _get_greeting_reply(message: str) -> str:
-    """Selamlama için hızlı yanıt — LLM çağrısı yok."""
     return random.choice(QUICK_REPLIES["selamlama"])
 
 
@@ -135,16 +91,6 @@ class ConversationAgent(BaseAgent):
         super().__init__("conversation_agent", llm, db)
 
     async def execute(self, input_data: dict) -> dict:
-        """
-        Parametreler:
-            message:      str
-            chat_history: list (opsiyonel)
-            budget_info:  dict (opsiyonel — BUDGET_QUERY için)
-
-        Döndürür:
-            intent, confidence, is_product_request, is_comparison,
-            comparison_products, extracted_query, reply
-        """
         t0 = time.monotonic()
         message = input_data.get("message", "").strip()
         history = input_data.get("chat_history", [])
@@ -154,20 +100,17 @@ class ConversationAgent(BaseAgent):
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
 
-        # ── 1a. Açık selamlama → hızlı yol (LLM çağrısı yok) ────────────
         lower = message.lower().strip()
         if len(lower) <= 35 and any(lower.startswith(g) or lower == g for g in GREETING_WORDS):
             elapsed = (time.monotonic() - t0) * 1000
             self.logger.info(f"[conv] quick=GREETING | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, _get_greeting_reply(message))
 
-        # ── 1b. Hal hatır sorusu → hızlı yol ────────────────────────────
         if len(lower) <= 40 and any(lower.startswith(g) or lower == g for g in HOWRU_WORDS):
             elapsed = (time.monotonic() - t0) * 1000
             self.logger.info(f"[conv] quick=HOWRU | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, random.choice(HOWRU_REPLIES))
 
-        # ── 1c. Bütçe sorusu → hızlı yol ────────────────────────────────
         if any(kw in lower for kw in BUDGET_KEYWORDS):
             self.logger.info("[conv] quick=BUDGET_QUERY")
             reply = await self._handle_budget_query(message, budget_info, user_id)
@@ -175,7 +118,6 @@ class ConversationAgent(BaseAgent):
             self.logger.info(f"[conv] BUDGET_QUERY done | {elapsed:.0f}ms")
             return self._build_result("BUDGET_QUERY", 0.97, reply)
 
-        # ── 2. Her şeyi LLM'e gönder ─────────────────────────────────────
         product_context = self._get_product_context(history)
         has_recent_products = product_context is not None
         prev_query = (product_context or {}).get("user_query", "") or ""
@@ -211,12 +153,10 @@ class ConversationAgent(BaseAgent):
             comparison_products = result.get("comparison_products", [])
             extracted_query = result.get("extracted_query")
 
-            # Güven düşükse CHITCHAT'e düşür
             if confidence < 0.45 and intent in ("PRODUCT_SEARCH", "COMPARISON"):
                 intent = "CHITCHAT"
                 reply = "Tam anlayamadım 😅 Ürün mü arıyorsun, yoksa başka bir konuda yardım mı istersin?"
 
-            # PRODUCT_SEARCH + extracted_query kısa/boş + önceki sorgu varsa → birleştir
             if (
                 intent == "PRODUCT_SEARCH"
                 and has_recent_products
@@ -239,11 +179,9 @@ class ConversationAgent(BaseAgent):
             comparison_products = []
             extracted_query = message if intent == "PRODUCT_SEARCH" else None
 
-        # ── 3. BUDGET_QUERY özel işlemi (LLM yoluyla gelenlerde) ─────────
         if intent == "BUDGET_QUERY" and not reply:
             reply = await self._handle_budget_query(message, budget_info, user_id)
 
-        # ── 4. COMPLAINT özel işlemi ──────────────────────────────────────
         if intent == "COMPLAINT":
             if not reply:
                 try:
@@ -263,14 +201,7 @@ class ConversationAgent(BaseAgent):
             extracted_query=extracted_query,
         )
 
-    # ── Bütçe sorgusu işleyici ───────────────────────────────────────────────
-
     async def _handle_budget_query(self, message: str, budget_info: dict | None, user_id: str | None = None) -> str:
-        """
-        Bütçe sorusunu yanıtlar.
-        budget_info dışarıdan geldiyse direkt kullanır,
-        yoksa BudgetAgent'ı kendisi çağırıp çeker.
-        """
         if not budget_info and user_id:
             try:
                 from app.agents.budget_agent import BudgetAgent
@@ -305,16 +236,7 @@ class ConversationAgent(BaseAgent):
         except Exception:
             return "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
 
-    # ── v3: Bağlam yardımcıları ──────────────────────────────────────────────
-
     def _get_product_context(self, history: list) -> dict | None:
-        """
-        Son ~8 mesajda ürün önerisi var mı kontrol et.
-        Varsa: önceki kullanıcı sorgusu + ürün isimleri döner.
-
-        History DESC sıralı gelir (en yeni ilk). En yeni asistan ürün
-        mesajını bulup, onu tetikleyen kullanıcı sorgusunu eşleştiririz.
-        """
         if not history:
             return None
 
@@ -325,21 +247,16 @@ class ConversationAgent(BaseAgent):
             if meta.get("type") != "products":
                 continue
 
-            # Bu ürün önerisini tetikleyen kullanıcı mesajını bul
             user_query = ""
             user_msg_id = meta.get("user_msg_id")
-            # Sonraki elemanlarda (daha eski) user mesajını ara
             for older in history[i + 1:i + 6]:
                 if older.get("role") != "user":
                     continue
-                # Önce id eşleşmesi (sağlam yol)
                 if user_msg_id and older.get("id") == user_msg_id:
                     user_query = older.get("message", "") or ""
                     break
-                # ID eşleşmezse, en yakın user mesajını fallback olarak al
                 if not user_query:
                     user_query = older.get("message", "") or ""
-                # ID yoksa direkt ilk user mesajıyla yetin
                 if not user_msg_id:
                     break
 
@@ -355,7 +272,6 @@ class ConversationAgent(BaseAgent):
         return None
 
     def _strip_product_search_prefixes(self, query: str) -> str:
-        """'pantolon öner', 'pantolon arıyorum' → 'pantolon' gibi sadeleştir."""
         if not query:
             return ""
         text = query.strip()
@@ -373,37 +289,29 @@ class ConversationAgent(BaseAgent):
         return text or query.strip()
 
     def _build_refined_query(self, prev_query: str, new_message: str) -> str:
-        """Önceki sorgu + yeni bağlamı birleştirerek rafine edilmiş sorgu oluştur."""
         prev_core = self._strip_product_search_prefixes(prev_query) or prev_query or ""
         lower = new_message.lower()
 
-        # Cinsiyet düzeltmesi (token-bazlı, daha güvenli)
         gender = _has_gender_hint(new_message)
         if gender == "male":
             return f"erkek {prev_core}".strip()
         if gender == "female":
             return f"kadın {prev_core}".strip()
 
-        # Fiyat düzeltmesi
         if "daha ucuz" in lower or "daha uygun" in lower:
             return f"{prev_core} uygun fiyatlı".strip()
         if "daha pahalı" in lower or "daha kaliteli" in lower:
             return f"{prev_core} premium kaliteli".strip()
 
-        # Beğenmeme / alternatif
         if any(w in lower for w in ["başka", "farklı", "alternatif", "beğenmedim"]):
             return f"{prev_core} alternatif".strip()
 
-        # Genel ek bilgi: önceki sorguya ek olarak ekle
         return f"{prev_core} {new_message}".strip()
-
-    # ── Yardımcılar ──────────────────────────────────────────────────────────
 
     def _format_history(self, history: list, limit: int = 8) -> str:
         if not history:
             return ""
-        # history DB'den DESC (en yeni ilk) gelir; LLM'e kronolojik sırayla
-        # (eski → yeni) gönderiyoruz. Önce ters çevir, sonra son `limit`'i al.
+        # history DB'den DESC (en yeni ilk) gelir; LLM'e kronolojik (eski → yeni) gönderilir.
         chronological = list(reversed(history))
         recent = chronological[-limit:]
         lines = []
@@ -411,7 +319,6 @@ class ConversationAgent(BaseAgent):
             role = "Kullanıcı" if h.get("role") == "user" else "Asistan"
             msg = h.get("message", "")
 
-            # v3: Ürün önerisi mesajlarını zenginleştir
             if h.get("role") == "assistant":
                 meta = _coerce_metadata(h.get("metadata"))
                 if meta.get("type") == "products":

@@ -20,7 +20,6 @@ class AvatarUpdateRequest(BaseModel):
 
 @router.post("/register")
 async def register(body: RegisterRequest):
-    """Yeni kullanıcı kaydı. Supabase Auth üzerinden yapılır."""
     client = SupabaseService().client
     try:
         result = client.auth.sign_up({
@@ -52,7 +51,6 @@ async def register(body: RegisterRequest):
 
 @router.post("/login")
 async def login(body: LoginRequest):
-    """Kullanıcı girişi. Supabase access token döner."""
     client = SupabaseService().client
     try:
         result = client.auth.sign_in_with_password({
@@ -83,7 +81,6 @@ async def login(body: LoginRequest):
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    """Token'dan mevcut kullanıcı bilgisini döner."""
     db = SupabaseService()
     profile = await db.get_profile(current_user["sub"])
     if not profile:
@@ -96,9 +93,6 @@ async def update_avatar(
     body: AvatarUpdateRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Kullanıcının profil fotoğrafını günceller.
-    avatar_url: base64 data URL (örn. 'data:image/png;base64,...') veya null (kaldırmak için).
-    """
     user_id = current_user["sub"]
     avatar = body.avatar_url
 

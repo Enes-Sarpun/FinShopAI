@@ -21,9 +21,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-/* ────────────────────────────────────────────────
-   FADE-UP HELPER
-──────────────────────────────────────────────── */
 function FadeUp({
   children,
   delay = 0,
@@ -48,9 +45,6 @@ function FadeUp({
   );
 }
 
-/* ────────────────────────────────────────────────
-   SCROLL PROGRESS BAR (C.1)
-──────────────────────────────────────────────── */
 function ScrollProgress() {
   const [progress, setProgress] = useState(0);
   useEffect(() => {
@@ -75,9 +69,6 @@ function ScrollProgress() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   NAVBAR
-──────────────────────────────────────────────── */
 function Navbar({ onCTA }: { onCTA: () => void }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -163,16 +154,12 @@ function Navbar({ onCTA }: { onCTA: () => void }) {
   );
 }
 
-/* ────────────────────────────────────────────────
-   HERO  (B.1 — parallax + enhanced card stack)
-──────────────────────────────────────────────── */
 function Hero({ onCTA }: { onCTA: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [typed, setTyped] = useState("");
   const fullText = "60.000 TL'ye kadar iyi bir telefon öner...";
 
-  /* Mouse parallax */
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -182,7 +169,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
     });
   }, []);
 
-  /* Typewriter for chat demo */
   useEffect(() => {
     let i = 0;
     const id = setInterval(() => {
@@ -201,7 +187,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
       className="min-h-screen flex items-center pt-16 pb-12 px-6"
     >
       <div className="max-w-6xl mx-auto w-full grid md:grid-cols-2 gap-12 items-center">
-        {/* Left */}
         <div>
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full mb-6 border border-indigo-100">
@@ -271,7 +256,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
           </motion.div>
         </div>
 
-        {/* Right — parallax card stack */}
         <motion.div
           initial={{ opacity: 0, x: 40 }}
           animate={{ opacity: 1, x: 0 }}
@@ -279,21 +263,18 @@ function Hero({ onCTA }: { onCTA: () => void }) {
           className="hidden md:flex justify-center items-center"
         >
           <div className="relative w-[340px] h-[340px]">
-            {/* Back card */}
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
               style={{ x: mouse.x * 0.6, y: mouse.y * 0.6 }}
               className="absolute top-10 left-10 w-64 h-40 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-400 shadow-xl opacity-50"
             />
-            {/* Mid card */}
             <motion.div
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
               style={{ x: mouse.x * 0.4, y: mouse.y * 0.4 }}
               className="absolute top-5 left-5 w-64 h-40 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-400 shadow-xl opacity-75"
             />
-            {/* Front card */}
             <motion.div
               animate={{ y: [0, -7, 0] }}
               transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
@@ -327,7 +308,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
               </div>
             </motion.div>
 
-            {/* Chip — bütçeye uygun */}
             <motion.div
               animate={{ y: [0, -5, 0] }}
               transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
@@ -343,7 +323,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
               <p className="text-gray-400 mt-0.5 ml-6">Samsung TV — ₺8.299</p>
             </motion.div>
 
-            {/* Typewriter chat bubble */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -355,7 +334,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
               <p className="font-semibold">{typed}<span className="animate-pulse">|</span></p>
             </motion.div>
 
-            {/* Sparkline mini card */}
             <motion.div
               animate={{ y: [0, -4, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
@@ -375,9 +353,6 @@ function Hero({ onCTA }: { onCTA: () => void }) {
   );
 }
 
-/* ────────────────────────────────────────────────
-   WHAT IS IT  (A.1 — metin düzeltmeleri)
-──────────────────────────────────────────────── */
 function WhatIsIt() {
   const miniCards = [
     { icon: Brain, label: "Akıllı Analiz", desc: "Verilerini öğrenir, sana uyum sağlar", color: "indigo" },
@@ -452,9 +427,6 @@ function WhatIsIt() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   STORY  (B.2 — timeline + scroll-triggered)
-──────────────────────────────────────────────── */
 function StoryItem({ num, text, delay }: { num: string; text: string; delay: number }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
@@ -466,7 +438,6 @@ function StoryItem({ num, text, delay }: { num: string; text: string; delay: num
       transition={{ duration: 0.65, delay, ease: [0.25, 0.1, 0.25, 1] }}
       className="flex gap-6 items-start relative"
     >
-      {/* Timeline dot */}
       <div className="flex flex-col items-center flex-shrink-0">
         <motion.div
           initial={{ scale: 0 }}
@@ -475,7 +446,6 @@ function StoryItem({ num, text, delay }: { num: string; text: string; delay: num
           className="w-3 h-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 shadow-sm shadow-indigo-300 mt-2"
         />
       </div>
-      {/* Number + text */}
       <div className="pb-8">
         <motion.span
           initial={{ opacity: 0, scale: 0.6 }}
@@ -516,9 +486,7 @@ function Story() {
           </h2>
         </FadeUp>
 
-        {/* Timeline line + items */}
         <div className="relative pl-6">
-          {/* Vertical line */}
           <div className="absolute left-[5px] top-2 bottom-2 w-px bg-gradient-to-b from-indigo-200 via-purple-200 to-transparent" />
 
           {[
@@ -546,9 +514,6 @@ function Story() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   FEATURES  (B.4 — hover glow border)
-──────────────────────────────────────────────── */
 function FeatureCard({
   icon: Icon,
   title,
@@ -651,11 +616,6 @@ function Features() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   HOW IT HELPS  (B.3 — horizontal scroll snap)
-──────────────────────────────────────────────── */
-
-/* Scenario preview mockups */
 function ElectronicsMockup() {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
@@ -664,7 +624,6 @@ function ElectronicsMockup() {
 
   return (
     <div ref={ref} className="space-y-3">
-      {/* User message */}
       <motion.div
         initial={{ opacity: 0, x: 20 }} animate={show ? { opacity: 1, x: 0 } : {}}
         transition={{ duration: 0.4 }}
@@ -672,7 +631,6 @@ function ElectronicsMockup() {
       >
         60.000 TL&apos;ye kadar iyi bir telefon öner
       </motion.div>
-      {/* AI response */}
       <motion.div
         initial={{ opacity: 0, x: -20 }} animate={show ? { opacity: 1, x: 0 } : {}}
         transition={{ duration: 0.4, delay: 0.5 }}
@@ -704,7 +662,6 @@ function GoalMockup() {
 
   return (
     <div ref={ref} className="flex flex-col items-center gap-4">
-      {/* Progress ring */}
       <div className="relative w-28 h-28">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
@@ -733,7 +690,6 @@ function GoalMockup() {
         <p className="text-sm font-extrabold text-gray-900 font-numeric">₺19.500 / ₺30.000</p>
         <p className="text-[11px] text-indigo-500 mt-1">65 gün kaldı</p>
       </div>
-      {/* Monthly bars */}
       <div className="flex items-end gap-1.5 h-10">
         {[40, 55, 48, 65, 72, 80].map((h, i) => (
           <motion.div
@@ -858,7 +814,6 @@ function HowItHelps() {
     },
   ];
 
-  /* Track active card via scroll */
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -881,7 +836,6 @@ function HowItHelps() {
             Günlük hayatı nasıl kolaylaştırır?
           </h2>
 
-          {/* Progress dots */}
           <div className="flex items-center justify-center gap-3 mt-6">
             {cases.map((_, i) => (
               <button
@@ -894,7 +848,6 @@ function HowItHelps() {
           </div>
         </FadeUp>
 
-        {/* Horizontal scroll container */}
         <div
           ref={scrollRef}
           onScroll={onScroll}
@@ -917,7 +870,6 @@ function HowItHelps() {
               }}
             >
               <div className="grid md:grid-cols-2 h-full min-h-[400px]">
-                {/* Left: info */}
                 <div className={`p-8 flex flex-col justify-center bg-gradient-to-br ${bgLeft}`}>
                   <span className="text-xs font-bold text-indigo-500 tracking-widest mb-3">{num}</span>
                   <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center mb-4">
@@ -934,7 +886,6 @@ function HowItHelps() {
                   </button>
                 </div>
 
-                {/* Right: live mockup */}
                 <div className="p-8 flex items-center justify-center bg-white/40">
                   {preview}
                 </div>
@@ -947,9 +898,6 @@ function HowItHelps() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   CTA BANNER  (C.5 — shimmer + floating icons)
-──────────────────────────────────────────────── */
 function CTABanner({ onCTA }: { onCTA: () => void }) {
   return (
     <section className="py-20 px-6">
@@ -961,7 +909,6 @@ function CTABanner({ onCTA }: { onCTA: () => void }) {
             boxShadow: "0 20px 60px rgba(79,70,229,0.4)",
           }}
         >
-          {/* Animated mesh overlay */}
           <div
             className="absolute inset-0 opacity-[0.07]"
             style={{
@@ -970,7 +917,6 @@ function CTABanner({ onCTA }: { onCTA: () => void }) {
               backgroundSize: "40px 40px",
             }}
           />
-          {/* Floating shopping icons */}
           {[
             { icon: ShoppingBag, top: "12%", left: "8%", size: 22, delay: 0 },
             { icon: Star, top: "20%", right: "10%", size: 18, delay: 0.8 },
@@ -1009,9 +955,6 @@ function CTABanner({ onCTA }: { onCTA: () => void }) {
   );
 }
 
-/* ────────────────────────────────────────────────
-   FOOTER  (A.3 — tek geliştirici)
-──────────────────────────────────────────────── */
 function Footer() {
   return (
     <footer className="border-t border-gray-100/80">
@@ -1094,9 +1037,6 @@ function Footer() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   SECTION DIVIDER  (C.2)
-──────────────────────────────────────────────── */
 function Divider() {
   return (
     <div className="max-w-6xl mx-auto px-6 flex items-center gap-4 my-2">
@@ -1111,9 +1051,6 @@ function Divider() {
   );
 }
 
-/* ────────────────────────────────────────────────
-   ROOT
-──────────────────────────────────────────────── */
 export default function Home() {
   const router = useRouter();
 

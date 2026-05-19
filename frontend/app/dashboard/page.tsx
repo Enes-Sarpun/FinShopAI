@@ -50,7 +50,6 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [fetching, setFetching] = useState(true);
 
-  // Sayfa geçişinde scroll pozisyonunu sıfırla
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     document.documentElement.scrollTop = 0;
@@ -76,14 +75,12 @@ export default function DashboardPage() {
     };
   }, [userId]);
 
-  // Harcama ekleme / silme sonrası sadece bütçeyi yeniden çek
   const refreshBudget = useCallback(async () => {
     if (!userId) return;
     try {
       const b = await budgetApi.getAnalysis(userId);
       setBudget(b as Budget);
     } catch {
-      // sessiz hata — kullanıcıya zaten toast var
     }
   }, [userId]);
 
@@ -96,7 +93,6 @@ export default function DashboardPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 py-8">
 
-          {/* Karşılama başlığı */}
           <motion.div
             className="mb-6"
             initial={{ opacity: 0, y: -12 }}
@@ -112,7 +108,6 @@ export default function DashboardPage() {
             </p>
           </motion.div>
 
-          {/* Günlük ipucu banner */}
           <DailyTip />
 
           {loading || fetching ? (
@@ -129,12 +124,9 @@ export default function DashboardPage() {
             </div>
           ) : budget ? (
             <div className="space-y-6">
-              {/* Bütçe kartları */}
               <BudgetCards budget={budget} />
 
-              {/* Ana içerik grid — 3 sütun */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Sol kolon: harcama takibi + tasarruf ipuçları + yıldızlı ürünler */}
                 <div className="lg:col-span-1 space-y-4">
                   {userId && (
                     <motion.div
@@ -156,7 +148,6 @@ export default function DashboardPage() {
                   <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
                 </div>
 
-                {/* Orta + sağ kolon: chat + hızlı erişim */}
                 <div className="lg:col-span-2 space-y-4">
                   <motion.div
                     initial={{ opacity: 0, y: 16 }}

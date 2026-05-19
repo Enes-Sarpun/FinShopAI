@@ -46,7 +46,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className={plusJakarta.className}>
-        {/* ── Pastel Blob + Şerit Arka Planı ── */}
         <div
           aria-hidden="true"
           style={{
@@ -57,7 +56,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             pointerEvents: "none",
           }}
         >
-          {/* Kayan FinShop AI şeritleri */}
           <div className="global-stripe-bg">
             {Array.from({ length: 20 }).map((_, r) => (
               <div key={r} className="global-stripe-row">
@@ -68,7 +66,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             ))}
           </div>
 
-          {/* Blob 1 — indigo */}
           <div
             style={{
               position: "absolute",
@@ -82,7 +79,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               willChange: "transform",
             }}
           />
-          {/* Blob 2 — pembe */}
           <div
             style={{
               position: "absolute",
@@ -96,7 +92,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               willChange: "transform",
             }}
           />
-          {/* Blob 3 — mor, ortalanmış dönen */}
           <div
             style={{
               position: "absolute",
@@ -112,7 +107,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           />
         </div>
 
-        {/* ── Ana İçerik ── */}
         <div style={{ position: "relative", zIndex: 1 }}>
           <Providers>{children}</Providers>
         </div>

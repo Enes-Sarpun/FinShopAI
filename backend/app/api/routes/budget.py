@@ -1,18 +1,3 @@
-# app/api/routes/budget.py
-
-"""
-Budget Routes - API Endpoint'leri
-===================================
-
-POST   /api/budget/create                       - Bütçe oluştur ve analiz et
-GET    /api/budget/{user_id}                    - Bütçeyi getir
-GET    /api/budget/{user_id}/analysis           - Bütçe analizi getir
-POST   /api/budget/expense                      - Harcama ekle
-GET    /api/budget/{user_id}/expenses           - Son harcamaları listele
-DELETE /api/budget/expense/{expense_id}         - Harcamayı sil (undo için)
-POST   /api/budget/affordability                - Uygunluk kontrol et
-"""
-
 from fastapi import APIRouter, HTTPException, Depends
 from app.agents.budget_agent import BudgetAgent
 from app.services.supabase_service import SupabaseService
@@ -28,52 +13,13 @@ router = APIRouter(tags=["budget"])
 
 
 def get_agent():
-    """Budget Agent oluştur"""
     llm = LLMService()
     db = SupabaseService()
     return BudgetAgent(llm, db)
 
 
-# ==================== ENDPOINT'LER ====================
-
 @router.post("/create")
 async def create_budget(request: BudgetCreateRequest, current_user: dict = Depends(get_current_user)):
-    """
-    Bütçe oluştur ve analiz et.
-
-    Kullanıcıdan gelir, gider ve tasarruf bilgilerini alır.
-    Supabase'e kaydeder, Personality verisiyle analiz yapar.
-
-    Örnek Request:
-    {
-        "user_id": "uuid",
-        "income_data": {
-            "salary": 8000,
-            "extra_income": 1000
-        },
-        "expense_data": {
-            "rent": 2500,
-            "electricity": 300,
-            "water": 100,
-            "gas": 200,
-            "internet": 150,
-            "phone": 100,
-            "loan_payment": 500,
-            "insurance": 200,
-            "groceries": 1000,
-            "transportation": 500,
-            "health": 200,
-            "education": 300,
-            "entertainment": 200,
-            "clothing": 100
-        },
-        "savings_data": {
-            "savings_goal": 1000,
-            "savings_purpose": "Tatil"
-        }
-    }
-    """
-
     try:
         agent = get_agent()
 
@@ -101,12 +47,6 @@ async def create_budget(request: BudgetCreateRequest, current_user: dict = Depen
 
 @router.get("/{user_id}")
 async def get_budget(user_id: str, current_user: dict = Depends(get_current_user)):
-    """
-    Kullanıcının bütçesini getir.
-
-    Supabase'den ham bütçe verisini döner.
-    """
-
     try:
         db = SupabaseService()
         budget = await db.get_budget(user_id)
@@ -131,13 +71,6 @@ async def get_budget(user_id: str, current_user: dict = Depends(get_current_user
 
 @router.get("/{user_id}/analysis")
 async def get_budget_analysis(user_id: str, current_user: dict = Depends(get_current_user)):
-    """
-    Kullanıcının bütçe analizini getir.
-
-    Personality verisiyle birlikte analiz yapar.
-    Spending type'a göre kişiselleştirilmiş tavsiyeler döner.
-    """
-
     try:
         agent = get_agent()
 
@@ -162,23 +95,6 @@ async def get_budget_analysis(user_id: str, current_user: dict = Depends(get_cur
 
 @router.post("/expense")
 async def add_expense(request: ExpenseRequest, current_user: dict = Depends(get_current_user)):
-    """
-    Harcama ekle.
-
-    Gerçekleşen harcamayı Supabase'e kaydeder.
-
-    Örnek Request:
-    {
-        "user_id": "uuid",
-        "category": "Gıda",
-        "amount": 500,
-        "description": "Market alışverişi"
-    }
-
-    Geçerli Kategoriler:
-    Gıda, Ulaşım, Sağlık, Eğitim, Eğlence, Giyim, Diğer
-    """
-
     try:
         agent = get_agent()
 
@@ -236,11 +152,6 @@ async def delete_expense(
     expense_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Harcamayı siler. Sadece kendi harcamasını silebilir.
-
-    "Geri Al" (undo) akışı için kullanılır.
-    """
     if not expense_id:
         raise HTTPException(status_code=400, detail="expense_id zorunludur")
 
@@ -264,19 +175,6 @@ async def delete_expense(
 
 @router.post("/affordability")
 async def check_affordability(request: AffordabilityRequest, current_user: dict = Depends(get_current_user)):
-    """
-    Harcama uygunluğunu kontrol et.
-
-    Kullanıcının belirli tutarı harcayıp harcayamayacağını kontrol eder.
-    Personality verisiyle kişiselleştirilmiş tavsiye verir.
-
-    Örnek Request:
-    {
-        "user_id": "uuid",
-        "amount": 1500
-    }
-    """
-
     try:
         agent = get_agent()
 

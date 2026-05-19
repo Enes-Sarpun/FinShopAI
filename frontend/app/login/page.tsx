@@ -10,11 +10,7 @@ import {
 } from "lucide-react";
 import { authApi } from "@/lib/api";
 
-/* ─────────────────────────────────────────────────────────
-   YÜZEN ARKA PLAN İKONLARI
-───────────────────────────────────────────────────────── */
 const BG_ICONS = [
-  // [Icon, x%, y%, boyut, opaklık, süre(s), gecikme(s), döndürme]
   { Icon: ShoppingBag, x: 8, y: 12, size: 28, op: 0.18, dur: 7, del: 0, rot: -15 },
   { Icon: Gift, x: 82, y: 8, size: 32, op: 0.15, dur: 9, del: 1.2, rot: 12 },
   { Icon: Star, x: 20, y: 75, size: 22, op: 0.20, dur: 6, del: 0.5, rot: 20 },
@@ -59,18 +55,12 @@ function FloatingIcons() {
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   STAGGER FADE-IN
-───────────────────────────────────────────────────────── */
 const field = (i: number) => ({
   initial: { opacity: 0, y: 12 },
   animate: { opacity: 1, y: 0 },
   transition: { delay: 0.05 + i * 0.08, duration: 0.3, ease: [0.25, 0.1, 0.25, 1] as const },
 });
 
-/* ═══════════════════════════════════════
-   GİRİŞ FORMU
-═══════════════════════════════════════ */
 function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -153,9 +143,6 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   );
 }
 
-/* ═══════════════════════════════════════
-   KAYIT FORMU
-═══════════════════════════════════════ */
 function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -268,12 +255,9 @@ function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
   );
 }
 
-/* ═══════════════════════════════════════
-   POLİS ŞERİDİ KATMANI
-═══════════════════════════════════════ */
 const STRIPE_TEXT = "FinShop AI";
-const STRIPE_REPEAT = 14; // her satırda kaç tekrar
-const STRIPE_ROWS = 18; // kaç satır
+const STRIPE_REPEAT = 14;
+const STRIPE_ROWS = 18;
 
 function StripeBg() {
   return (
@@ -289,27 +273,19 @@ function StripeBg() {
   );
 }
 
-/* ═══════════════════════════════════════
-   BRAND PANEL (sol ön + sağ register modu)
-═══════════════════════════════════════ */
 function BrandPanel({ onSwitch, label, btnText, isRight = false }:
   { onSwitch: () => void; label: string; btnText: string; isRight?: boolean }) {
   return (
     <div className="relative flex flex-col items-center justify-center h-full px-10 text-white overflow-hidden"
       style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}>
 
-      {/* Polis şeridi arka plan */}
       <StripeBg />
-
-      {/* Yüzen ikonlar */}
       <FloatingIcons />
 
-      {/* Dekoratif daireler */}
       <div className={`absolute ${isRight ? "top-6 left-6" : "top-8 right-8"} w-24 h-24 bg-white/10 rounded-full pointer-events-none`} />
       <div className={`absolute ${isRight ? "bottom-8 right-8" : "bottom-12 left-6"} w-20 h-20 bg-white/10 rounded-full pointer-events-none`} />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/5 rounded-full pointer-events-none" />
 
-      {/* İçerik */}
       <div className="relative z-10 flex flex-col items-center text-center">
         <div className="logo-float mb-6">
             <ShoppingBag className="w-14 h-14 text-white drop-shadow-lg" />
@@ -327,19 +303,8 @@ function BrandPanel({ onSwitch, label, btnText, isRight = false }:
   );
 }
 
-/* ═══════════════════════════════════════
-   ANA SAYFA — kitap sayfası gibi açılır/kapanır
-
-   YAKLAŞIM: backface-visibility'ye güvenmek bazı Chromium sürümlerinde
-   sızıntıya yol açıyor (arka yüzeyin içeriği önden ters yazıyla görünüyor).
-   Bu yüzden rotation değerini bir MotionValue ile takip ediyoruz ve
-   yüzlerin opacity'sini (görünür olma) bu değere göre kesip alıyoruz:
-   - |rot| < 90  → Giriş formu görünür, Kayıt görünmez
-   - |rot| >= 90 → Kayıt görünür, Giriş görünmez
-
-   Eşik (90°) sayfanın tam dik olduğu nokta — kullanıcı zaten o anda yüzü
-   göremez, dolayısıyla geçiş hiç fark edilmez. Sızıntı imkânsız.
-═══════════════════════════════════════ */
+// backface-visibility Chromium'da sızıntıya yol açıyor; bunun yerine rotation MotionValue'ya
+// bağlı opacity kullanıyoruz: |rot| < 90 → login görünür, |rot| >= 90 → register görünür.
 function LoginPageInner() {
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"login" | "register">(
@@ -347,7 +312,6 @@ function LoginPageInner() {
   );
   const isRegister = mode === "register";
 
-  // Rotation'ı manuel kontrol ediyoruz; opacity'yi onunla senkronlamak için
   const rotation = useMotionValue(isRegister ? -180 : 0);
 
   useEffect(() => {
@@ -358,7 +322,6 @@ function LoginPageInner() {
     return () => controls.stop();
   }, [isRegister, rotation]);
 
-  // Yüz görünürlükleri rotation'a bağlı; geçiş 90°'de yapılır (sayfa edge-on iken)
   const loginOpacity = useTransform(rotation, (v) => (Math.abs(v) < 90 ? 1 : 0));
   const registerOpacity = useTransform(rotation, (v) => (Math.abs(v) >= 90 ? 1 : 0));
   const loginPointer = useTransform(rotation, (v) =>
@@ -368,7 +331,6 @@ function LoginPageInner() {
     Math.abs(v) >= 90 ? "auto" : "none"
   );
   const spineOpacity = useTransform(rotation, (v) => {
-    // 0° → 0, 90° → 0.35, 180° → 0.35
     const a = Math.min(Math.abs(v) / 90, 1);
     return a * 0.35;
   });
@@ -389,7 +351,6 @@ function LoginPageInner() {
               "0 32px 80px rgba(99,102,241,0.25), 0 8px 32px rgba(0,0,0,0.12)",
           }}
         >
-          {/* Sol kapak — login modunda görünür, register modunda altında form kapatır */}
           <motion.div
             className="absolute inset-y-0 left-0 w-1/2"
             initial={false}
@@ -404,7 +365,6 @@ function LoginPageInner() {
             />
           </motion.div>
 
-          {/* Sağ kapak — register modunda görünür, login modunda form üstünü kapatır */}
           <motion.div
             className="absolute inset-y-0 right-0 w-1/2"
             initial={false}
@@ -420,7 +380,6 @@ function LoginPageInner() {
             />
           </motion.div>
 
-          {/* ── ÜST KATMAN: çevrilen kitap sayfası ── */}
           <motion.div
             className="absolute inset-y-0 right-0 w-1/2 overflow-hidden"
             style={{
@@ -432,7 +391,6 @@ function LoginPageInner() {
               willChange: "transform",
             }}
           >
-            {/* Giriş formu — rotation 0 yakınken görünür */}
             <motion.div
               className="absolute inset-0 overflow-hidden bg-white"
               style={{
@@ -451,7 +409,6 @@ function LoginPageInner() {
               <LoginForm onSwitch={() => setMode("register")} />
             </motion.div>
 
-            {/* Kayıt formu — rotation 180 yakınken görünür, ters çevrilmiş ki kullanıcı düz okusun */}
             <motion.div
               className="absolute inset-0 overflow-hidden bg-white"
               style={{
@@ -472,7 +429,6 @@ function LoginPageInner() {
             </motion.div>
           </motion.div>
 
-          {/* Spine — kitap sırtı: sayfa açıldıkça belirginleşen ortadaki gölge */}
           <motion.div
             aria-hidden
             className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 pointer-events-none z-[3]"

@@ -5,7 +5,6 @@ from app.core.config import settings
 
 security = HTTPBearer()
 
-# ── Singleton auth client (her istekte yeni bağlantı açmayı önler) ────────
 _auth_client = None
 
 
@@ -17,7 +16,6 @@ def _get_auth_client():
 
 
 def get_supabase_user(token: str) -> dict:
-    """Supabase access token'ı doğrular ve kullanıcı bilgisini döner."""
     try:
         client = _get_auth_client()
         result = client.auth.get_user(token)

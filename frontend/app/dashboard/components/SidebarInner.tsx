@@ -74,7 +74,6 @@ function ChatItem({ item, onDelete, onClose, activeLoadId }: {
       await chatApi.updateTitle(item.id, title);
       item.metadata = { ...item.metadata, title };
     } catch {
-      // ignore
     } finally {
       setIsSaving(false);
       setIsEditing(false);

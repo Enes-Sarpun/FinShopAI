@@ -22,7 +22,6 @@ export default function Navbar({ userName, userEmail }: NavbarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Dropdown dışına tıklayınca kapat
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -41,13 +40,11 @@ export default function Navbar({ userName, userEmail }: NavbarProps) {
     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-6 py-3 transition-shadow">
       <div className="max-w-6xl mx-auto flex justify-between items-center">
 
-        {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2">
           <ShoppingBag className="w-5 h-5 text-blue-600" />
           <span className="font-bold text-gray-900">FinShop AI</span>
         </Link>
 
-        {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-6">
           {NAV_LINKS.map((link) => (
             <Link
@@ -64,13 +61,11 @@ export default function Navbar({ userName, userEmail }: NavbarProps) {
           ))}
         </div>
 
-        {/* Sağ: Alışverişe Başla + Avatar Dropdown */}
         <div className="hidden md:flex items-center gap-3">
           <Link href="/chat" className="btn-primary text-sm py-2 px-4">
             Alışverişe Başla
           </Link>
 
-          {/* Avatar dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((p) => !p)}
@@ -84,13 +79,11 @@ export default function Navbar({ userName, userEmail }: NavbarProps) {
 
             {dropdownOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden z-50">
-                {/* Kullanıcı bilgisi */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-sm font-semibold text-gray-800 truncate">{userName || "Kullanıcı"}</p>
                   <p className="text-xs text-gray-400 truncate mt-0.5">{userEmail || ""}</p>
                 </div>
 
-                {/* Menü öğeleri */}
                 <div className="py-1.5">
                   <Link
                     href="/settings"
@@ -124,7 +117,6 @@ export default function Navbar({ userName, userEmail }: NavbarProps) {
           </div>
         </div>
 
-        {/* Mobil hamburger */}
         <button
           className="md:hidden text-gray-600 hover:text-gray-900"
           onClick={() => setMenuOpen((prev) => !prev)}
@@ -133,7 +125,6 @@ export default function Navbar({ userName, userEmail }: NavbarProps) {
         </button>
       </div>
 
-      {/* Mobil menü */}
       {menuOpen && (
         <div className="md:hidden mt-3 border-t border-gray-100 pt-3 flex flex-col gap-1 px-2">
           {NAV_LINKS.map((link) => (

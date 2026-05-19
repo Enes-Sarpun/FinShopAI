@@ -33,7 +33,6 @@ export async function apiFetch<T = unknown>(
   return res.json();
 }
 
-// ── Auth ──────────────────────────────────────────────
 export const authApi = {
   register: (email: string, password: string, full_name: string) =>
     apiFetch("/api/auth/register", {
@@ -72,7 +71,6 @@ export const authApi = {
     }),
 };
 
-// ── Personality ───────────────────────────────────────
 export const personalityApi = {
   getQuestions: () => apiFetch<{ questions: unknown[]; total: number }>("/api/personality/questions"),
 
@@ -87,7 +85,6 @@ export const personalityApi = {
   getHistory: () => apiFetch("/api/personality/history"),
 };
 
-// ── Budget ────────────────────────────────────────────
 export const budgetApi = {
   create: (user_id: string, income_data: unknown, expense_data: unknown, savings_data: unknown) =>
     apiFetch("/api/budget/create", {
@@ -118,7 +115,6 @@ export const budgetApi = {
     apiFetch(`/api/budget/expense/${expense_id}`, { method: "DELETE" }),
 };
 
-// ── Chat ──────────────────────────────────────────────
 export const chatApi = {
   send: (message: string, conversation_id?: string | null) =>
     apiFetch("/api/chat", {
@@ -145,7 +141,6 @@ export const chatApi = {
     }),
 };
 
-// ── Watchlist ─────────────────────────────────────
 export const watchlistApi = {
   list: () => apiFetch("/api/watchlist/"),
 

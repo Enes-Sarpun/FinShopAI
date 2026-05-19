@@ -19,13 +19,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("system");
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
 
-  // localStorage'dan tema oku
   useEffect(() => {
     const saved = (localStorage.getItem("finshop_theme") as Theme) || "system";
     setThemeState(saved);
   }, []);
 
-  // Sistem tercihini takip et
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -49,7 +47,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, [theme]);
 
-  // Diğer sekmelere yansıt
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key === "finshop_theme" && e.newValue) {

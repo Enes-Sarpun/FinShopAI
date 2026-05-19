@@ -1,17 +1,3 @@
-"""
-Recommendation Agent — Geliştirilmiş Sürüm v2
-=============================================
-Değişiklikler:
-  - Tüm personality skorları kullanılıyor (impulsive, research, saving)
-  - Karşılaştırma modu eklendi (COMPARISON intent)
-  - review_analysis.overall_sentiment → review_analysis.analysis.sentiment_score okunuyor
-  - Hibrit value_score hesaplama (rating + sentiment + budget fit) Python tarafında
-  - Affordability tagging: affordable / tight / over_budget
-  - pros / cons / review_summary inject (ürün çıktısına ekleniyor)
-  - Gift context parametreleri: occasion, recipient
-  - Gelişmiş fallback: LLM başarısız olursa hibrit skora göre sıralama
-"""
-
 from app.agents.base_agent import BaseAgent
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
@@ -160,10 +146,6 @@ def _compute_personalized_score(product: dict, weights: dict) -> tuple[float, li
 
 
 def select_winner(products: list, personality: dict, user_budget: dict = None) -> dict | None:
-    """
-    Kişilik bazlı winner seçimi. LLM çağrısı yok — template-based, hızlı.
-    Returns: { winner_index, reasoning_for_user, confidence, key_factors }
-    """
     if not products:
         return None
     if len(products) == 1:
@@ -190,7 +172,6 @@ def select_winner(products: list, personality: dict, user_budget: dict = None) -
 
     confidence = "high" if score_gap > 1.5 else ("medium" if score_gap > 0.7 else "low")
 
-    # Samimi reasoning oluştur
     top_factors = sorted(winner["factors"], key=lambda f: f["w"], reverse=True)[:2]
     name = winner["product"].get("name", "Bu ürün")
     openings = [
@@ -207,7 +188,6 @@ def select_winner(products: list, personality: dict, user_budget: dict = None) -
     else:
         reason_part = "çünkü en dengeli seçenek"
 
-    # Kişilik notu
     personality_note = ""
     if personality.get("saving_score", 5) >= 7:
         personality_note = " Dikkatli alışveriş yapıyorsun, bu seçim güvenli."
@@ -243,7 +223,6 @@ class RecommendationAgent(BaseAgent):
         budget = input_data.get("budget") or {}
         products = input_data.get("products") or []
 
-        # Gift context
         occasion = input_data.get("occasion") or ""
         recipient = input_data.get("recipient") or ""
         over_budget_products = input_data.get("over_budget_products") or []
@@ -258,7 +237,6 @@ class RecommendationAgent(BaseAgent):
         if not products and not over_budget_products:
             return self._empty_result("Önerilecek ürün bulunamadı.")
 
-        # Sadece over_budget ürünler varsa (bütçeye uygun alternatif bulunamadı)
         if not products and over_budget_products and budget_exceeded_warning:
             req_query = budget_exceeded_warning.get("requested_query", "")
             min_price = budget_exceeded_warning.get("min_found_price", 0)
@@ -283,7 +261,6 @@ class RecommendationAgent(BaseAgent):
                 "winner": None,
             }
 
-        # Finansal metrikler
         spending_type = personality.get("spending_type", "dengeli")
         risk_score = personality.get("risk_score", 5)
         impulsive_score = personality.get("impulsive_score", 5)
@@ -293,16 +270,12 @@ class RecommendationAgent(BaseAgent):
         financial_metrics = budget.get("financial_metrics", {})
         spendable = financial_metrics.get("spendable_after_savings", 0) or 0
 
-        # 1) Affordability tagging + review inject
         enriched_products = self._enrich_products(products, spendable)
-
-        # 2) Hibrit value_score hesapla (Python tarafında)
         scored_products = self._compute_value_scores(enriched_products, spendable)
 
         products_text = self._format_products(scored_products)
         gift_context_text = self._format_gift_context(occasion, recipient)
 
-        # Karşılaştırma modu
         if is_comparison and comparison_products:
             return await self._comparison_mode(
                 message=message,
@@ -315,7 +288,6 @@ class RecommendationAgent(BaseAgent):
                 gift_context_text=gift_context_text,
             )
 
-        # Normal öneri modu
         try:
             prompt = RECOMMENDATION_PROMPT.format(
                 spending_type=spending_type,
@@ -338,7 +310,6 @@ class RecommendationAgent(BaseAgent):
             scored_products, llm_result.get("ranking", [])
         )
 
-        # Winner seçimi (LLM çağrısı yok, template-based hızlı)
         winner_data = select_winner(ranked_products, personality, budget)
         if winner_data:
             wi = winner_data["winner_index"]
@@ -346,7 +317,6 @@ class RecommendationAgent(BaseAgent):
                 ranked_products[wi]["is_recommended"] = True
                 ranked_products[wi]["recommendation_reason"] = winner_data["reasoning_for_user"]
 
-        # LLM summary yoksa sade fallback (teknik terim içermeyen)
         summary = llm_result.get("summary", "")
         if not summary or any(w in summary.lower() for w in ["profil", "spending_type", "affordability", "pipeline"]):
             summary = "Sana birkaç güzel seçenek buldum, bir göz at!"
@@ -355,7 +325,6 @@ class RecommendationAgent(BaseAgent):
         if financial_advice and any(w in financial_advice.lower() for w in ["savruk", "profil", "spending", "affordability"]):
             financial_advice = ""
 
-        # Bütçe aşımı durumunda: kullanıcıya bilgi ver + alternatiflerin üzerine not ekle
         budget_warning_data = None
         if budget_exceeded_warning:
             req_query  = budget_exceeded_warning.get("requested_query", "")
@@ -384,10 +353,6 @@ class RecommendationAgent(BaseAgent):
             "winner": winner_data,
         }
 
-    # ------------------------------------------------------------------ #
-    # Karşılaştırma modu                                                   #
-    # ------------------------------------------------------------------ #
-
     async def _comparison_mode(
         self,
         message: str,
@@ -399,7 +364,6 @@ class RecommendationAgent(BaseAgent):
         spendable: float,
         gift_context_text: str,
     ) -> dict:
-        """Karşılaştırma modu — ürünleri karşı karşıya değerlendir."""
         try:
             prompt = COMPARISON_PROMPT.format(
                 spending_type=spending_type,
@@ -436,24 +400,10 @@ class RecommendationAgent(BaseAgent):
             "top_products": ranked_products,
         }
 
-    # ------------------------------------------------------------------ #
-    # Yardımcı metodlar                                                    #
-    # ------------------------------------------------------------------ #
-
     def _enrich_products(self, products: list, spendable: float) -> list:
-        """
-        Her ürüne:
-          - affordability_tag  : affordable | tight | over_budget
-          - review_summary     : LLM'den gelen genel özet metni
-          - pros               : inceleme artıları
-          - cons               : inceleme eksileri
-        alanları eklenir.
-        """
         enriched = []
         for p in products:
-            p = dict(p)  # kopya al, orijinali değiştirme
-
-            # --- Affordability tagging ---
+            p = dict(p)
             price = p.get("price", 0) or 0
             if spendable <= 0:
                 tag = "unknown"
@@ -464,8 +414,6 @@ class RecommendationAgent(BaseAgent):
             else:
                 tag = "over_budget"
             p["affordability_tag"] = tag
-
-            # --- Review detail inject ---
             review = p.get("review_analysis") or {}
             analysis = review.get("analysis") or {}
 
@@ -477,12 +425,6 @@ class RecommendationAgent(BaseAgent):
         return enriched
 
     def _compute_value_scores(self, products: list, spendable: float) -> list:
-        """
-        Hibrit value_score hesapla (0–10):
-          - rating bileşeni      : rating/5 * 4  → max 4 puan
-          - sentiment bileşeni   : sentiment_score/10 * 3 → max 3 puan
-          - budget fit bileşeni  : affordable=3, tight=1.5, over_budget=0
-        """
         for p in products:
             rating = float(p.get("rating") or 0)
             review = p.get("review_analysis") or {}
@@ -505,7 +447,6 @@ class RecommendationAgent(BaseAgent):
         return products
 
     def _format_gift_context(self, occasion: str, recipient: str) -> str:
-        """Gift context varsa prompt'a ek satır oluştur."""
         parts = []
         if occasion:
             parts.append(f"Özel durum/hediye vesile: {occasion}")
@@ -552,9 +493,6 @@ class RecommendationAgent(BaseAgent):
         return "\n".join(lines)
 
     def _rank_products(self, products: list, llm_ranking: list) -> list:
-        """
-        LLM sıralaması varsa ona göre, yoksa hibrit value_score'a göre sırala.
-        """
         if llm_ranking:
             name_to_product = {p.get("name", ""): p for p in products}
             ranked = []
@@ -572,7 +510,6 @@ class RecommendationAgent(BaseAgent):
                     ranked.append(p)
             return ranked[:5]
 
-        # Gelişmiş fallback: hibrit value_score'a göre sırala
         return sorted(
             products,
             key=lambda p: (p.get("value_score") or 0),

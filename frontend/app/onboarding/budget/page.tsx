@@ -84,7 +84,6 @@ export default function BudgetPage() {
         <p className="text-gray-500 text-sm mb-6">Sana özel öneriler sunabilmemiz için aylık gelir ve giderlerini gir.</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Gelir */}
           <section>
             <h2 className="font-semibold text-gray-700 mb-3">Gelir (TL)</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -93,7 +92,6 @@ export default function BudgetPage() {
             </div>
           </section>
 
-          {/* Sabit Giderler */}
           <section>
             <h2 className="font-semibold text-gray-700 mb-3">Sabit Giderler (TL)</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -108,7 +106,6 @@ export default function BudgetPage() {
             </div>
           </section>
 
-          {/* Değişken Giderler */}
           <section>
             <h2 className="font-semibold text-gray-700 mb-3">Değişken Giderler (TL)</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -123,7 +120,6 @@ export default function BudgetPage() {
             </div>
           </section>
 
-          {/* Tasarruf */}
           <section>
             <h2 className="font-semibold text-gray-700 mb-3">Tasarruf Hedefi</h2>
             <div className="grid grid-cols-2 gap-4">

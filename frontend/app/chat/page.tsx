@@ -293,7 +293,6 @@ function ChatPageInner() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
 
-            {/* Welcome hero */}
             <AnimatePresence>
               {messages.length === 0 && !sending && !loadingThread && (
                 <motion.div
@@ -469,10 +468,8 @@ function TypingIndicator() {
             }}
             transition={{ duration: 0.3 }}
           >
-            {/* Logo - arka plan olmadan */}
             <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center">
               {index < currentStep && (
-                /* Tamamlanan - yeşil checkmark */
                 <motion.div
                   animate={{ scale: [1, 1.1, 1] }}
                   transition={{ duration: 0.6, delay: 0.2 }}
@@ -481,7 +478,6 @@ function TypingIndicator() {
                 </motion.div>
               )}
               {index === currentStep && (
-                /* Aktif - büyüyüp küçülen ve parlayan logo */
                 <motion.div
                   animate={{
                     scale: [1, 1.10, 1],
@@ -503,7 +499,6 @@ function TypingIndicator() {
                 </motion.div>
               )}
               {index > currentStep && (
-                /* Henüz yapılmayan - gri dot */
                 <motion.div>
                   <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full inline-block" />
                 </motion.div>

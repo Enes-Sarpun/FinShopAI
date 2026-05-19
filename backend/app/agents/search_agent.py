@@ -1,18 +1,3 @@
-"""
-Search Agent — v4 (Paralel Manus + SerpAPI)
-=====================================
-Değişiklikler:
-  - Ürün deduplikasyonu (isim benzerliği > 80%)
-  - Karşılaştırma modu desteği (is_comparison flag)
-  - Daha fazla satıcı URL mapping
-  - Fiyat parse iyileştirmesi (TL, ₺, virgül/nokta)
-  - Senkron SerpAPI çağrısı hatasız asyncio.to_thread ile sarılı
-  v4:
-  - ENABLE_MANUS=true ise Manus + SerpAPI paralel çalışır
-  - Sonuçlar birleştirilir, duplikatlar temizlenir
-  - Manus veya SerpAPI down olsa bile diğeri devam eder
-"""
-
 import asyncio
 import random
 import re
@@ -34,10 +19,6 @@ def infer_budget_from_context(
     occasion: str = None,
     personality: dict = None,
 ) -> dict:
-    """
-    Kullanıcı fiyat belirtmediyse akıllı bütçe tahmini yapar.
-    Returns: { "min": float, "max": float, "auto_inferred": True }
-    """
     CATEGORY_RANGES = {
         ("anne", None):              (300, 1500),
         ("anne", "doğum_günü"):      (400, 2000),
@@ -66,7 +47,6 @@ def infer_budget_from_context(
             break
 
     if user_budget:
-        # user_budget financial_metrics dict'i olabilir (spendable_after_savings içerir)
         spendable = (
             user_budget.get("spendable_after_savings")
             or user_budget.get("spendable")
@@ -119,7 +99,6 @@ _STOP_SUFFIXES = (
 
 
 def _detect_specific_product(query: str) -> bool:
-    """LLM olmadan kural tabanlı spesifik ürün/marka tespiti."""
     lower = query.lower()
     if _SPECIFIC_MODEL_RE.search(lower):
         return True
@@ -148,10 +127,6 @@ def _similarity(a: str, b: str) -> float:
 
 
 def _deduplicate(products: list, threshold: float = 0.80) -> list:
-    """
-    İsim benzerliği yüksek ürünleri çıkar.
-    Daha düşük fiyatlı olanı (veya ilk geleni) tutar.
-    """
     unique = []
     for p in products:
         name = p.get("name", "")
@@ -167,7 +142,6 @@ def _deduplicate(products: list, threshold: float = 0.80) -> list:
     return unique
 
 
-# Satıcı → URL mapping (genişletilmiş)
 _SELLER_URL_MAP = {
     "trendyol": lambda q: f"https://www.trendyol.com/sr?q={q}",
     "amazon": lambda q: f"https://www.amazon.com.tr/s?k={q}",
@@ -201,7 +175,6 @@ class SearchAgent(BaseAgent):
 
         self.logger.info(f"Arama başladı: {query} | comparison={is_comparison}")
 
-        # 1. LLM ile sorguyu parse et
         llm_parse_ok = False
         parsed = {}
         try:
@@ -213,7 +186,6 @@ class SearchAgent(BaseAgent):
             self.logger.info(f"Parsed query: {parsed}")
             llm_parse_ok = True
 
-            # Hediye bağlamı varsa occasion/recipient güncelle
             if not occasion and parsed.get("occasion"):
                 occasion = parsed["occasion"]
             if not recipient and parsed.get("recipient"):
@@ -221,7 +193,6 @@ class SearchAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"Sorgu parse hatası (LLM fallback aktif): {e}")
 
-        # 2. Arama sorgusunu oluştur
         tags = parsed.get("tags", [])
         recipient = recipient or parsed.get("recipient", "")
         occasion = occasion or parsed.get("occasion", "")
@@ -229,20 +200,15 @@ class SearchAgent(BaseAgent):
         inferred_categories = parsed.get("inferred_categories", [])
         previously_shown: list[str] = input_data.get("previously_shown") or []
 
-        # Spesifik marka+model mi (iPhone 15) yoksa genel/kategori mi (bütçeme uygun iPhone)?
         is_specific_product = parsed.get("is_specific_product", False)
-        # LLM parse başarısız olduysa kural tabanlı tespit
         if not llm_parse_ok:
             is_specific_product = _detect_specific_product(query)
 
-        # Kullanıcı fiyat belirtmemişse → otomatik bütçe tahmini
         budget_was_inferred = False
         if not budget:
             user_budget_metrics = input_data.get("user_budget") or {}
             spendable = user_budget_metrics.get("spendable_after_savings") or 0
-
-            # Spesifik ürün (iPhone 16, Samsung S24) → inferred budget uygulanmaz
-            # Fiyatı önceden bilinemeyen ürünleri budget ile kesmek yanlış sonuç verir
+            # Spesifik ürün (iPhone 16 gibi) için inferred budget uygulanmaz — fiyatı kesmek yanlış sonuç verir
             if is_specific_product:
                 pass
             elif gift_intent and (recipient or occasion) and spendable > 0:
@@ -261,7 +227,6 @@ class SearchAgent(BaseAgent):
                 budget_was_inferred = True
                 self.logger.info(f"Genel bütçe tahmini: {budget} TL (spendable={spendable})")
 
-        # Tag'ler varsa ilk tag'i kullan; LLM parse başarısızsa query'yi temizle
         if tags:
             search_query = tags[0]
         elif not llm_parse_ok:
@@ -271,7 +236,6 @@ class SearchAgent(BaseAgent):
 
         self.logger.info(f"Search query: {search_query} | budget: {budget} | tags: {tags}")
 
-        # 3. Ürün çek — ENABLE_MANUS=true ise paralel, yoksa sadece SerpAPI
         budget_range = None
         if budget:
             budget_range = {"min": 0, "max": float(budget)}
@@ -279,20 +243,10 @@ class SearchAgent(BaseAgent):
         budget_exceeded_warning: dict | None = None
 
         if settings.ENABLE_MANUS and self._is_user_in_manus_rollout(input_data.get("user_id")):
-            # ── Paralel: Manus + SerpAPI aynı anda ──────────────────────────
             products = await self._parallel_search(search_query, budget, budget_range, parsed)
             self.logger.info(f"[search] paralel mod | {len(products)} ürün bulundu")
         else:
-            # ── Legacy: Sadece SerpAPI ──────────────────────────────────────
-            #
-            # İKİ MOD:
-            # A) Spesifik ürün (iPhone 15, Galaxy S24):
-            #    → Bütçe filtresi olmadan ara, over_budget badge'i ile göster
-            # B) Genel/kategori (bütçeme uygun iPhone, ucuz telefon):
-            #    → Bütçe filtresiyle ara, boşsa kategori fallback
-
             if is_specific_product:
-                # ── MOD A: Spesifik ürün — filtre yok, over_budget badge ────
                 self.logger.info(f"[search] Spesifik ürün modu: {search_query}")
                 raw = await asyncio.to_thread(
                     self._search_google_shopping_sync,
@@ -321,13 +275,11 @@ class SearchAgent(BaseAgent):
                         f"over_budget={len(over_budget_products)} | min={min_price} TL"
                     )
             else:
-                # ── MOD B: Genel/kategori — bütçe filtresiyle ara ───────────
                 products = await asyncio.to_thread(
                     self._search_google_shopping_sync, search_query, budget
                 )
                 products = [p for p in products if not self._is_refurbished_or_grey_market(p)]
 
-                # Boş sonuçta kalan tag'leri sırayla dene
                 if not products and len(tags) > 1:
                     for alt_tag in tags[1:]:
                         self.logger.info(f"Alternatif tag deneniyor: {alt_tag}")
@@ -338,7 +290,6 @@ class SearchAgent(BaseAgent):
                         if products:
                             break
 
-                # Hâlâ boşsa ham sorguyu dene
                 if not products and search_query != query:
                     words = query.split()
                     fallback_q = " ".join(words[:5]) if len(words) > 5 else query
@@ -347,7 +298,6 @@ class SearchAgent(BaseAgent):
                     )
                     products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
 
-                # inferred_categories fallback
                 if not products and inferred_categories:
                     for cat in inferred_categories:
                         cat_query = _build_query_from_category(cat, recipient)
@@ -359,7 +309,6 @@ class SearchAgent(BaseAgent):
                         if products:
                             break
 
-                # Son çare: hediye fallback
                 if not products and (recipient or occasion):
                     fallback_query = self._get_gift_fallback(recipient, occasion, budget)
                     if fallback_query:
@@ -369,7 +318,6 @@ class SearchAgent(BaseAgent):
                         )
                         products = [p for p in raw if not self._is_refurbished_or_grey_market(p)]
 
-        # Daha önce gösterilen ürünleri filtrele (aynı sohbette tekrar gelmemesi için)
         if previously_shown:
             shown_cf = [s.casefold() for s in previously_shown]
             def _was_shown(p: dict) -> bool:
@@ -382,7 +330,6 @@ class SearchAgent(BaseAgent):
                     f"[search] previously_shown filtre: {before_filter} → {len(products)} ürün"
                 )
 
-        # Karşılaştırma modunda: her ürün için ayrı arama yap
         if is_comparison and comparison_products and len(products) < 2:
             self.logger.info("Karşılaştırma modu: ayrı aramalar yapılıyor")
             all_products = []
@@ -391,24 +338,21 @@ class SearchAgent(BaseAgent):
                     self._search_google_shopping_sync, cp, budget
                 )
                 if cp_products:
-                    all_products.append(cp_products[0])  # Her ürünün en iyisi
+                    all_products.append(cp_products[0])
             if all_products:
                 products = all_products
 
-        # 4. Deduplikasyon
         before = len(products)
         products = _deduplicate(products)
         if before != len(products):
             self.logger.info(f"Deduplicated: {before} → {len(products)} ürün")
 
-        # 5. İlk 5 ürün için LLM öneri nedeni üret (BATCH — tek çağrı)
         top_products = products[:5]
         if top_products:
             reasons = await self._generate_reasons_batch(top_products, occasion, recipient)
             for i, product in enumerate(top_products):
                 product["recommendation_reason"] = reasons.get(str(i + 1), "")
 
-        # 6. Supabase'e kaydet
         if user_id and products:
             await self._save_to_supabase(user_id, query, products)
 
@@ -466,8 +410,7 @@ class SearchAgent(BaseAgent):
 
                 self.logger.debug(f"  item: {item.get('title','')[:40]} | price_raw={price_raw!r} | parsed={price}")
 
-                # Fiyat parse edilemişse ve budget varsa filtrele
-                # %20 tolerans: tahmini bütçede biraz esneklik ver
+                # %20 tolerans: tahmini bütçede esneklik ver
                 if not no_budget_filter and budget and price > 0 and price > float(budget) * 1.20:
                     continue
 
@@ -479,7 +422,6 @@ class SearchAgent(BaseAgent):
                 seller = item.get("source", "")
                 name = item.get("title", "")
 
-                # SerpAPI gerçek URL'i varsa onu kullan, yoksa üret
                 real_link = item.get("link") or item.get("product_link")
                 product_url = real_link if real_link else self._generate_url(name, seller)
 
@@ -516,15 +458,11 @@ class SearchAgent(BaseAgent):
                 .replace("\xa0", "")
                 .strip()
             )
-            # Türk formatı: nokta binlik ayraç, virgül ondalık
             if "," in cleaned and "." in cleaned:
-                # 1.234,56 → 1234.56
                 cleaned = cleaned.replace(".", "").replace(",", ".")
             elif "," in cleaned:
-                # 1234,56 → 1234.56
                 cleaned = cleaned.replace(",", ".")
             else:
-                # 1.234 → 1234
                 if cleaned.count(".") == 1 and len(cleaned.split(".")[-1]) == 3:
                     cleaned = cleaned.replace(".", "")
             return float(cleaned)
@@ -541,13 +479,8 @@ class SearchAgent(BaseAgent):
 
     @staticmethod
     def _get_gift_fallback(recipient: str, occasion: str, budget: float = None) -> str:
-        """
-        recipient/occasion'a göre Google Shopping'de sonuç veren somut bir arama sorgusu döner.
-        """
         r = (recipient or "").lower()
         o = (occasion or "").lower()
-
-        # Alıcıya göre popüler hediye kategorileri
         recipient_map = {
             "baba":   ["erkek kol saati", "deri cüzdan erkek", "erkek parfüm"],
             "anne":   ["kadın çanta", "kadın parfüm", "altın kolye"],
@@ -559,14 +492,12 @@ class SearchAgent(BaseAgent):
             "iş arkadaşı": ["kupa bardak", "çikolata kutusu", "ajanda"],
         }
 
-        # Bütçeye göre seçim (yüksek bütçe → ilk seçenek, düşük bütçe → son seçenek)
         for key, options in recipient_map.items():
             if key in r:
                 if budget and budget < 500:
                     return options[-1]
                 return options[0]
 
-        # Occasion'a göre generic fallback
         if "babalar" in o:
             return "erkek kol saati"
         if "anneler" in o:
@@ -597,7 +528,6 @@ class SearchAgent(BaseAgent):
             return self._fallback_reason(product, occasion, recipient)
 
     async def _generate_reasons_batch(self, products: list, occasion: str = "", recipient: str = "") -> dict:
-        """3 ürünü tek LLM çağrısında işle — batch prompting."""
         product_lines = []
         for i, p in enumerate(products, 1):
             product_lines.append(
@@ -655,10 +585,7 @@ class SearchAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"Supabase kayıt hatası: {e}")
 
-    # ── FAZ 3: Paralel Manus + SerpAPI ──────────────────────────────────────
-
     def _is_user_in_manus_rollout(self, user_id: str | None) -> bool:
-        """Her istek için rastgele seçim — MANUS_ROLLOUT_PERCENTAGE kadar şans."""
         pct = settings.MANUS_ROLLOUT_PERCENTAGE
         if pct >= 100:
             return True
@@ -673,7 +600,6 @@ class SearchAgent(BaseAgent):
         budget_range: dict | None,
         parsed: dict,
     ) -> list:
-        """Manus + SerpAPI paralel çalıştır, sonuçları birleştir."""
         from app.services.llm.factory import LLMFactory
 
         manus_client = LLMFactory.get_manus()
@@ -715,7 +641,6 @@ class SearchAgent(BaseAgent):
 
         merged = self._merge_results(manus_products, serpapi_products)
 
-        # Manus da boşsa SerpAPI fallback zinciri
         if not merged:
             self.logger.info("[search] paralel sonuç boş, SerpAPI fallback zincirine geçiliyor")
             merged = await asyncio.to_thread(
@@ -725,7 +650,6 @@ class SearchAgent(BaseAgent):
         return merged
 
     async def _safe_manus_search(self, manus_client, query: str, budget_range: dict | None) -> dict:
-        """Manus araması — hata fırlatmaz."""
         try:
             result = await manus_client.research_products(
                 query=query,
@@ -756,7 +680,6 @@ class SearchAgent(BaseAgent):
             return {"products": []}
 
     async def _safe_serpapi_search(self, query: str, budget: float | None) -> dict:
-        """SerpAPI araması — hata fırlatmaz."""
         try:
             products = await asyncio.to_thread(
                 self._search_google_shopping_sync, query, budget
@@ -769,11 +692,6 @@ class SearchAgent(BaseAgent):
             return {"products": []}
 
     def _merge_results(self, manus_products: list, serpapi_products: list) -> list:
-        """
-        İki kaynaktan gelen ürünleri birleştir.
-        Manus öncelikli (daha zengin veri). SerpAPI tamamlayıcı.
-        Benzer isimli ürünler tek seferde, en zengin veriyle gösterilir.
-        """
         merged = []
         seen_names: set[str] = set()
 
@@ -789,10 +707,8 @@ class SearchAgent(BaseAgent):
                 merged.append(product)
                 seen_names.add(norm)
             else:
-                # Aynı ürün varsa daha ucuz fiyatı işaretle
                 self._update_with_better_price(merged, norm, product)
 
-        # Rating + fiyat skoruna göre sırala
         merged.sort(
             key=lambda p: (
                 p.get("rating", 0),
@@ -805,7 +721,6 @@ class SearchAgent(BaseAgent):
 
     @staticmethod
     def _normalize_product_name(name: str) -> str:
-        """Ürün isimlerini eşleştirme için normalize et."""
         if not name:
             return ""
         n = name.lower()
@@ -835,14 +750,6 @@ class SearchAgent(BaseAgent):
 
     @staticmethod
     def _build_brand_alt_query(brand: str, original_query: str, inferred_categories: list) -> str:
-        """
-        Bütçeye uygun alternatif için arama sorgusu üret.
-        Sadece marka adı yerine marka + kategori ipucu kullan.
-        Örn: brand="iPhone", query="iPhone 16" → "iPhone ucuz modeller"
-             brand="Apple", query="iPhone" → "Apple iPhone uygun fiyat"
-             brand="Samsung", query="Samsung Galaxy S24" → "Samsung Galaxy uygun fiyat"
-        """
-        # Marka → kategori eşlemesi
         _BRAND_CATEGORY = {
             "iphone": "iPhone",
             "apple": "Apple iPhone",
@@ -856,7 +763,6 @@ class SearchAgent(BaseAgent):
         brand_lower = brand.lower()
         base = _BRAND_CATEGORY.get(brand_lower, brand)
 
-        # inferred_categories'den kategori ipucu al
         cat_hint = ""
         if inferred_categories:
             cat_map = {
@@ -880,10 +786,6 @@ class SearchAgent(BaseAgent):
 
     @staticmethod
     def _extract_brand(query: str) -> str:
-        """
-        Arama sorgusundan marka adını çıkar.
-        Örn: "iPhone 15" → "iPhone", "Samsung Galaxy S24" → "Samsung"
-        """
         _KNOWN_BRANDS = [
             "apple", "iphone", "samsung", "xiaomi", "huawei", "oppo", "vivo",
             "realme", "oneplus", "sony", "lg", "motorola", "nokia", "asus",
@@ -894,7 +796,6 @@ class SearchAgent(BaseAgent):
         lower = query.lower()
         for brand in _KNOWN_BRANDS:
             if brand in lower:
-                # İlk kelimeyi de kontrol et (Samsung Galaxy → Samsung)
                 words = query.split()
                 if words and words[0].lower() == brand:
                     return words[0]
@@ -907,7 +808,6 @@ class SearchAgent(BaseAgent):
 
     @staticmethod
     def _update_with_better_price(merged: list, norm_name: str, new_product: dict):
-        """Aynı ürün varsa daha ucuz fiyatı 'alternative_price' olarak işaretle."""
         for existing in merged:
             ex_norm = re.sub(r"[^a-z0-9çğışöüâîû]", "", existing.get("name", "").lower())[:20]
             if ex_norm == norm_name:

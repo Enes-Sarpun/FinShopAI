@@ -28,7 +28,6 @@ function loadMessages(fallback: Msg[]): Msg[] {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Msg[];
     if (parsed.length === 0) return fallback;
-    // Eğer hiç user mesajı yoksa, eski (önceki dildeki) welcome'u taze WELCOME ile değiştir
     if (!parsed.some((m) => m.role === "user")) return fallback;
     return parsed;
   } catch {
@@ -63,7 +62,6 @@ export default function ChatPreview() {
   const [lastMsgId, setLastMsgId] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // sessionStorage'dan yükle
   useEffect(() => {
     setMessages(loadMessages(WELCOME));
     const saved = sessionStorage.getItem(THREAD_KEY);
@@ -73,7 +71,6 @@ export default function ChatPreview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Dil değişince welcome ekranındaysa taze WELCOME'a sıçra (önbellekteki eski metni temizle)
   useEffect(() => {
     if (!hydrated) return;
     if (!messages.some((m) => m.role === "user")) {
@@ -86,9 +83,7 @@ export default function ChatPreview() {
     if (hydrated) saveMessages(messages);
   }, [messages, hydrated]);
 
-  // Yeni mesaj geldiğinde chat'i kendi içinde en alta kaydır.
-  // scrollIntoView yerine container'ın scrollTop'unu manuel set ediyoruz;
-  // böylece tarayıcı dış (dashboard main) scroll'una dokunmaz.
+  // scrollIntoView yerine scrollTop kullanıyoruz; böylece dış (dashboard) sayfa scroll'una dokunmaz.
   useEffect(() => {
     const c = scrollContainerRef.current;
     if (!c) return;
@@ -102,11 +97,8 @@ export default function ChatPreview() {
     setLoading(true);
 
     try {
-      // Aktif conversation_id'yi backend'e ilet — yoksa yeni sohbet açar
       const data = await chatApi.send(text, lastMsgId) as ChatResponse;
 
-      // Backend'den dönen conversation_id'yi sakla (yeni sohbet ise ilk
-      // mesaj sonrası dolar; sonraki mesajlar aynı sohbete eklenir).
       const convId = data.conversation_id || data.user_msg_id || null;
       if (convId) {
         setLastMsgId(convId);
@@ -154,16 +146,12 @@ export default function ChatPreview() {
     sessionStorage.removeItem(THREAD_KEY);
   }
 
-  // Welcome ekranı: hiç user mesajı yoksa ve sadece bot karşılaması varsa
   const isWelcomeOnly = !messages.some((m) => m.role === "user");
-
-  // "Tam ekran" linki: konuşma varsa son mesajı yükle, yoksa boş chat
   const fullscreenHref = lastMsgId ? `/chat?load=${lastMsgId}` : "/chat";
 
   return (
     <div className="card flex flex-col h-[600px] p-0 overflow-hidden">
 
-      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/60 backdrop-blur-sm">
         <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
           <Sparkles className="w-4 h-4 text-white" />
@@ -193,7 +181,6 @@ export default function ChatPreview() {
         </div>
       </div>
 
-      {/* Mesajlar */}
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50/60 dark:bg-gray-900/40"
@@ -235,7 +222,6 @@ export default function ChatPreview() {
           return null;
         })}
 
-        {/* Yazıyor animasyonu */}
         {loading && (
           <div className="flex justify-start">
             <div className="bubble-bot flex items-center gap-1.5 py-3">
@@ -248,7 +234,6 @@ export default function ChatPreview() {
 
       </div>
 
-      {/* Öneri butonları — sadece ilk açılışta */}
       {isWelcomeOnly && !loading && (
         <div className="px-4 py-2 flex flex-col gap-1.5 bg-gray-50/60 dark:bg-gray-900/40 border-t border-gray-100 dark:border-gray-700/60">
           {SUGGESTIONS.map((s) => (
@@ -263,7 +248,6 @@ export default function ChatPreview() {
         </div>
       )}
 
-      {/* Input */}
       <form
         onSubmit={handleSubmit}
         className="flex gap-2 px-4 py-3 border-t border-gray-100 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/60 backdrop-blur-sm"

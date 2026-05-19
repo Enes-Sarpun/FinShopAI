@@ -34,7 +34,6 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
   const [error, setError] = useState<string | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
 
-  // Modal açıldığında alanları sıfırla ve tutar inputuna odaklan
   useEffect(() => {
     if (open) {
       setAmount("");
@@ -42,13 +41,12 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
       setDescription("");
       setError(null);
       setSubmitting(false);
-      // Animasyon sonrası focus, yoksa odak alınmıyor
+      // focus animasyon bitmeden çalışmıyor; kısa timeout gerekli
       const tmo = setTimeout(() => amountInputRef.current?.focus(), 80);
       return () => clearTimeout(tmo);
     }
   }, [open]);
 
-  // ESC ile kapatma
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -109,8 +107,7 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
               <form onSubmit={handleSubmit}>
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
                   <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t("expense.addTitle")}</h2>
                   <button
                     type="button"
@@ -123,9 +120,7 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
                   </button>
                 </div>
 
-                {/* Body */}
                 <div className="px-5 py-5 space-y-5">
-                  {/* Amount */}
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
                       {t("expense.amountLabel")}
@@ -156,7 +151,6 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
                     )}
                   </div>
 
-                  {/* Category chips */}
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
                       {t("expense.categoryLabel")}
@@ -187,7 +181,6 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
                     </div>
                   </div>
 
-                  {/* Description */}
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
                       {t("expense.noteLabel")}
@@ -204,7 +197,6 @@ export default function AddExpenseModal({ open, onClose, onSubmit }: AddExpenseM
                   </div>
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 dark:border-gray-700/60 bg-gray-50/60 dark:bg-gray-800/30">
                   <button
                     type="button"
