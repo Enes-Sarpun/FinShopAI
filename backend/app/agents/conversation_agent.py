@@ -105,18 +105,21 @@ class ConversationAgent(BaseAgent):
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
 
+        import re as _re
         lower = message.lower().strip()
-        if len(lower) <= 35 and any(lower.startswith(g) or lower == g for g in GREETING_WORDS):
+        # Noktalama temizlenmiş versiyon — keyword matching için
+        lower_clean = _re.sub(r"\s+", " ", _re.sub(r"[^\w\s]", " ", lower)).strip()
+        if len(lower_clean) <= 35 and any(lower_clean.startswith(g) or lower_clean == g for g in GREETING_WORDS):
             elapsed = (time.monotonic() - t0) * 1000
             self.logger.info(f"[conv] quick=GREETING | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, _get_greeting_reply(message))
 
-        if len(lower) <= 40 and any(lower.startswith(g) or lower == g for g in HOWRU_WORDS):
+        if len(lower_clean) <= 40 and any(lower_clean.startswith(g) or lower_clean == g for g in HOWRU_WORDS):
             elapsed = (time.monotonic() - t0) * 1000
             self.logger.info(f"[conv] quick=HOWRU | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, random.choice(HOWRU_REPLIES))
 
-        if any(kw in lower for kw in BUDGET_KEYWORDS):
+        if any(kw in lower_clean for kw in BUDGET_KEYWORDS):
             self.logger.info("[conv] quick=BUDGET_QUERY")
             reply = await self._handle_budget_query(message, budget_info, user_id)
             elapsed = (time.monotonic() - t0) * 1000
@@ -177,7 +180,7 @@ class ConversationAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"[conv] LLM error: {e}")
             # Fallback: keyword varlığına göre tahmin
-            has_product_kw = any(kw in lower for kw in PRODUCT_KEYWORDS)
+            has_product_kw = any(kw in lower_clean for kw in PRODUCT_KEYWORDS)
             intent = "PRODUCT_SEARCH" if has_product_kw else "CHITCHAT"
             confidence = 0.6
             reply = None if intent == "PRODUCT_SEARCH" else random.choice(QUICK_REPLIES.get("tesekkur", ["Ne demek! 😊"]))
