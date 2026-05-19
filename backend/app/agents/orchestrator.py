@@ -71,8 +71,11 @@ _WATCHLIST_KW = [
     "indirim olunca", "ucuzlayınca", "watchlist",
 ]
 _BUDGET_KW = [
-    "bütçem", "harcamam", "harcadım", "ne kadar harcadım",
-    "bütçe durumu", "mali durum", "bu ay ne", "aylık harcama",
+    "bütçem", "bütçemi", "bütçemde", "bütçem ne", "bütçem var",
+    "ne kadar bütçe", "bütçem ne kadar", "bütçe durumu", "bütçe bilgi",
+    "harcamam", "harcadım", "ne kadar harcadım", "bu ay ne harcadım",
+    "param var mı", "param ne kadar", "ne kadar param", "kalan param",
+    "mali durum", "finansal durum", "aylık harcama", "ne kadar kaldı",
 ]
 
 # ConversationAgent intent → Orchestrator intent mapping

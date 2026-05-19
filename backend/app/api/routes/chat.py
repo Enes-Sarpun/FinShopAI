@@ -57,6 +57,8 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             history = []
 
         from app.agents.conversation_agent import BUDGET_KEYWORDS as _BUDGET_MSG_HINTS
+        from app.core.logger import get_logger as _get_logger
+        _chat_logger = _get_logger("chat")
         budget_info = None
         if any(hint in body.message.lower() for hint in _BUDGET_MSG_HINTS):
             try:
@@ -65,8 +67,9 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
                     {"action": "analyze", "user_id": user_id}
                 )
                 budget_info = budget_result.get("financial_metrics")
-            except Exception:
-                pass
+                _chat_logger.info(f"[chat] budget_info prefetched: {bool(budget_info)}")
+            except Exception as _e:
+                _chat_logger.warning(f"[chat] budget prefetch failed: {_e}")
 
         conv_agent = ConversationAgent(llm=llm, db=db)
         conv_result = await conv_agent.execute({

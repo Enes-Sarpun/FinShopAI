@@ -25,10 +25,15 @@ HOWRU_REPLIES = [
 
 BUDGET_KEYWORDS = [
     "bütçem", "bütçemi", "bütçemde", "bütçeme", "bütçemle",
-    "bütçeni görebilir", "bütçemi görebilir", "bütçeyi görebilir",
-    "param var mı", "param yeter mi", "harcayabilir miyim",
-    "ne kadar harcadım", "harcama durumum", "mali durum", "finansal durum",
-    "ne kadar param", "bütçem ne",
+    "bütçem ne", "bütçem var", "bütçem kaç", "bütçem nedir",
+    "ne kadar bütçe", "bütçem ne kadar", "bütçe durumum", "bütçe bilgi",
+    "bütçeye bak", "bütçeyi göster", "bütçeyi görebilir",
+    "param var mı", "param yeter mi", "param ne kadar", "ne kadar param",
+    "param kaç", "param nedir", "paramı göster", "param kaldı mı",
+    "harcayabilir miyim", "ne kadar harcadım", "bu ay ne harcadım",
+    "harcama durumum", "mali durum", "finansal durum",
+    "gelir", "maaşım", "aylık gelir",
+    "ne kadar kaldı", "kalan param", "kalan bütçe",
 ]
 
 PRODUCT_KEYWORDS = [
@@ -209,13 +214,14 @@ class ConversationAgent(BaseAgent):
                     {"action": "analyze", "user_id": user_id}
                 )
                 budget_info = result.get("financial_metrics")
+                self.logger.info(f"[conv] budget_info fetched in handler: {bool(budget_info)}")
             except Exception as e:
                 self.logger.error(f"[conv] BudgetAgent çağrısı başarısız: {e}")
 
         if not budget_info:
             return (
                 "Bütçe bilgilerine ulaşamadım. "
-                "Henüz bütçe girmediysen Ayarlar sayfasından ekleyebilirsin."
+                "Bütçe Ayarları sayfasından gelir ve giderlerini girersen sana detaylı analiz yapabilirim."
             )
 
         try:
