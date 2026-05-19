@@ -57,9 +57,9 @@ export default function BudgetPage() {
     try {
       await budgetApi.create(
         userId,
-        { salary: Number(income.salary), extra_income: Number(income.extra_income) },
+        { salary: Number(income.salary) || 0, extra_income: Number(income.extra_income) || 0 },
         Object.fromEntries(Object.entries(expenses).map(([k, v]) => [k, Number(v) || 0])),
-        { savings_goal: Number(savings.savings_goal), savings_purpose: savings.savings_purpose }
+        { savings_goal: Number(savings.savings_goal) || 0, savings_purpose: savings.savings_purpose }
       );
       router.push("/dashboard");
     } catch (err: unknown) {

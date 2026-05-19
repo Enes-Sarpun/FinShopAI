@@ -68,7 +68,10 @@ export default function PersonalityPage() {
     }
     setSubmitting(true);
     try {
-      await personalityApi.submit(answers);
+      const intAnswers = Object.fromEntries(
+        Object.entries(answers).map(([k, v]) => [k, parseInt(v, 10)])
+      );
+      await personalityApi.submit(intAnswers);
       router.push("/onboarding/budget");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Hata oluştu");
