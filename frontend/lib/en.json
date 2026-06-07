@@ -27,7 +27,8 @@
     "settings": "Settings",
     "myAccount": "My Account",
     "openMenu": "Open menu",
-    "user": "User"
+    "user": "User",
+    "help": "Help"
   },
   "dashboard": {
     "welcomeBase": "Welcome",
@@ -81,6 +82,7 @@
       "account": "Account",
       "financialProfile": "Financial Profile",
       "app": "App",
+      "help": "Help",
       "session": "Session"
     },
     "items": {
@@ -91,10 +93,109 @@
       "personalityTest": "Personality Test",
       "personalityTestDesc": "Refresh your spending profile",
       "notifications": "Notifications",
+      "notificationsDesc": "Manage browser and email notifications",
       "privacy": "Privacy",
+      "privacyDesc": "Data usage and user rights",
+      "feedback": "Send Feedback",
+      "feedbackDesc": "Report a bug, suggestion or question",
       "logout": "Logout",
       "logoutDesc": "End your session"
-    }
+    },
+    "myAccount": "My Account",
+    "system": "System",
+    "systemLight": "Light",
+    "systemDark": "Dark",
+    "systemNext": "Switch to light mode",
+    "systemNextDark": "Switch to dark mode"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Choose which channels you want to receive notifications from.",
+    "backToSettings": "Back to Settings",
+    "infoBanner": "Notification features are coming soon. These settings are currently in preview mode.",
+    "preferencesTitle": "Communication Preferences",
+    "preferencesSubtitle": "Manage notification channels",
+    "browser": "Browser Notifications",
+    "browserDesc": "Get notified in your browser when there is a new update or a task is completed.",
+    "email": "Email Notifications",
+    "emailDesc": "Receive important updates and opportunity alerts to your email address.",
+    "comingSoonTitle": "Coming Soon",
+    "comingSoonSubtitle": "Planned notification features",
+    "comingSoonItems": [
+      "Price drop alerts (Watchlist)",
+      "Budget overrun warnings",
+      "Weekly spending summary",
+      "Personalized deal notifications"
+    ],
+    "emailSendTo": "Notifications will be sent to"
+  },
+  "privacy": {
+    "title": "Privacy",
+    "subtitle": "Learn how your data is stored and your rights.",
+    "backToSettings": "Back to Settings",
+    "safeBanner": "Keeping your data safe is our top priority. No personal data is shared with third parties.",
+    "dataStored": "What Data Is Stored?",
+    "dataStoredIntro": "FinShop AI stores the following data to provide you with a personalized experience:",
+    "dataStoredItems": [
+      "Account details: name, email address",
+      "Budget information: income, expenses and savings goals",
+      "Personality test results: spending profile",
+      "Chat history: conversations with the assistant",
+      "Watchlist: tracked products and price history",
+      "Expense records: manually added expenses"
+    ],
+    "dataProtected": "How Is My Data Protected?",
+    "dataProtectedItems": [
+      "All data is stored encrypted on Supabase infrastructure.",
+      "Each user can only access their own data (Row Level Security).",
+      "Passwords are never stored in plain text; strong hash algorithms are used.",
+      "All communication between the server and browser is encrypted via HTTPS.",
+      "Session tokens have a limited validity period."
+    ],
+    "dataPurpose": "What Is My Data Used For?",
+    "dataPurposeIntro": "We use your data only to provide you with a better service:",
+    "dataPurposeItems": [
+      "Providing product recommendations that fit your budget",
+      "Generating savings advice based on your personality profile",
+      "Tracking price changes for products on your watchlist",
+      "Using chat history for contextual responses"
+    ],
+    "dataPurposeNote": "Your data is never used for advertising or shared with third parties under any circumstances.",
+    "userRights": "Your User Rights",
+    "userRightsIntro": "Under GDPR you have the following rights:",
+    "userRightsItems": [
+      "Right of access: You can view all stored data.",
+      "Right to rectification: You can request correction of inaccurate data.",
+      "Right to erasure: You can permanently delete your account and all data.",
+      "Right to portability: You can request an export of your data.",
+      "Right to object: You can object to certain data processing activities."
+    ],
+    "dataOps": "Data Operations",
+    "dataOpsSubtitle": "Coming soon",
+    "download": "Download My Data",
+    "downloadDesc": "Export all your data in JSON format",
+    "deleteAccount": "Delete My Account and Data",
+    "deleteAccountDesc": "This action cannot be undone",
+    "contactBanner": "For requests regarding your privacy rights, reach us via Settings → Help."
+  },
+  "feedback": {
+    "categoryLabel": "Category",
+    "priorityLabel": "Priority",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Brief summary...",
+    "descLabel": "Description",
+    "descPlaceholder": "Describe in detail...",
+    "submit": "Submit",
+    "submitting": "Submitting...",
+    "successTitle": "Message Received!",
+    "successDesc": "We will get back to you as soon as possible.",
+    "newMessage": "Send New Message",
+    "catBug": "Bug Report",
+    "catSuggestion": "Suggestion / Idea",
+    "catQuestion": "Question",
+    "prioLow": "Low",
+    "prioMedium": "Medium",
+    "prioHigh": "High"
   },
   "chat": {
     "assistantName": "FinShop Assistant",

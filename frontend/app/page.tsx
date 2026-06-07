@@ -244,9 +244,9 @@ function Hero({ onCTA }: { onCTA: () => void }) {
             className="mt-10 flex items-center gap-6"
           >
             {[
-              { icon: Star, text: "Beta sürümü" },
+              { icon: Star, text: "Yapay Zeka Destekli" },
               { icon: Shield, text: "Güvenli & Şifreli" },
-              { icon: Zap, text: "Yakında herkese açık" },
+              { icon: Zap, text: "Kişiselleştirilmiş Deneyim" },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-1.5 text-xs text-gray-500">
                 <Icon className="w-3.5 h-3.5 text-indigo-500" />

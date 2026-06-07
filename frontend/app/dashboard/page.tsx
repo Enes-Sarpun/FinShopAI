@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -13,8 +13,6 @@ import BudgetCards from "./components/BudgetCards";
 import SavingsTips from "./components/SavingsTips";
 import QuickActions from "./components/QuickActions";
 import DailyTip from "./components/DailyTip";
-import ChatPreview from "./components/ChatPreview";
-import WishlistWidget from "./components/WishlistWidget";
 import ExpenseTracker from "./components/ExpenseTracker";
 
 interface UserInfo { full_name?: string; email?: string; }
@@ -135,10 +133,18 @@ export default function DashboardPage() {
             </div>
           ) : budget ? (
             <div className="space-y-6">
-              <BudgetCards budget={budget} />
+              {/* Tam genişlik: Finansal Profil (kartlar + bütçe sağlığı) */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05, duration: 0.4 }}
+              >
+                <BudgetCards budget={budget} />
+              </motion.div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 space-y-4">
+              {/* İki sütun: Sol = Harcama Takibi + Hızlı Erişim, Sağ = Tasarruf Önerileri */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
                   {userId && (
                     <motion.div
                       initial={{ opacity: 0, y: 16 }}
@@ -156,25 +162,22 @@ export default function DashboardPage() {
                       />
                     </motion.div>
                   )}
-                  <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
-                </div>
-
-                <div className="lg:col-span-2 space-y-4">
                   <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15, duration: 0.4 }}
                   >
-                    <ChatPreview />
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.25, duration: 0.4 }}
-                  >
                     <QuickActions />
                   </motion.div>
                 </div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2, duration: 0.4 }}
+                >
+                  <SavingsTips tips={budget.savings_tips ?? []} personality={personality} />
+                </motion.div>
               </div>
             </div>
           ) : (
