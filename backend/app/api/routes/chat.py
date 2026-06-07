@@ -58,9 +58,11 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
 
         from app.agents.conversation_agent import BUDGET_KEYWORDS as _BUDGET_MSG_HINTS
         from app.core.logger import get_logger as _get_logger
+        import re as _re
         _chat_logger = _get_logger("chat")
+        _msg_lower = _re.sub(r"[^\w\s]", " ", body.message.lower())
         budget_info = None
-        if any(hint in body.message.lower() for hint in _BUDGET_MSG_HINTS):
+        if any(hint in _msg_lower for hint in _BUDGET_MSG_HINTS):
             try:
                 from app.agents.budget_agent import BudgetAgent
                 budget_result = await BudgetAgent(llm=llm, db=db).execute(

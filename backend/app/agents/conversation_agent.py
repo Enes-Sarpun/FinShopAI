@@ -138,7 +138,12 @@ class ConversationAgent(BaseAgent):
             self.logger.info(f"[conv] quick=HOWRU | {elapsed:.0f}ms")
             return self._build_result("GREETING", 0.99, random.choice(HOWRU_REPLIES))
 
-        if any(kw in lower_clean for kw in BUDGET_KEYWORDS):
+        has_budget_kw = any(kw in lower_clean for kw in BUDGET_KEYWORDS)
+        has_product_kw = any(kw in lower_clean for kw in PRODUCT_KEYWORDS)
+        # Sadece bütçe sorusu ise hızlı yanıt ver.
+        # Ama mesajda aynı zamanda ürün araması da varsa (örn. "bütçemi aşıyor, X önerir misin")
+        # LLM'e bırak — hem bütçe hem ürün niyeti olabilir.
+        if has_budget_kw and not has_product_kw:
             self.logger.info("[conv] quick=BUDGET_QUERY")
             reply = await self._handle_budget_query(message, budget_info, user_id)
             elapsed = (time.monotonic() - t0) * 1000
