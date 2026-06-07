@@ -18,9 +18,9 @@ GREETING_WORDS = {
 
 HOWRU_WORDS = {"naber", "nasılsın", "nasıl gidiyor", "ne haber", "iyi misin"}
 HOWRU_REPLIES = [
-    "İyiyim, teşekkürler! 😊 Sen nasılsın? Bugün ne arıyoruz?",
-    "Gayet iyiyim! Sağ ol. Sana nasıl yardımcı olabilirim? 🛍️",
-    "Çok iyiyim, teşekkürler! Bugün bir şeyler mi arıyoruz?",
+    "Harikayım, sorduğun için çok teşekkürler! 😊 Sen nasılsın, günün nasıl geçiyor?",
+    "Bomba gibiyim! Sağ ol. Seninle sohbet etmek her zaman çok keyifli. Sen nasılsın, her şey yolunda mı? 🌸",
+    "Çok iyiyim, teşekkür ederim! Finansal dengemizi korumak için enerji doluyum. Sen nasılsın? 😊",
 ]
 
 BUDGET_KEYWORDS = [
@@ -88,6 +88,9 @@ def _has_gender_hint(message: str) -> str | None:
 
 
 def _get_greeting_reply(message: str) -> str:
+    clean = message.lower()
+    if any(h in clean for h in HOWRU_WORDS):
+        return random.choice(HOWRU_REPLIES)
     return random.choice(QUICK_REPLIES["selamlama"])
 
 
@@ -101,6 +104,7 @@ class ConversationAgent(BaseAgent):
         history = input_data.get("chat_history", [])
         budget_info = input_data.get("budget_info")
         user_id = input_data.get("user_id")
+        personality = input_data.get("personality")
 
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
@@ -109,16 +113,8 @@ class ConversationAgent(BaseAgent):
         lower = message.lower().strip()
         # Noktalama temizlenmiş versiyon — keyword matching için
         lower_clean = _re.sub(r"\s+", " ", _re.sub(r"[^\w\s]", " ", lower)).strip()
-        if len(lower_clean) <= 35 and any(lower_clean.startswith(g) or lower_clean == g for g in GREETING_WORDS):
-            elapsed = (time.monotonic() - t0) * 1000
-            self.logger.info(f"[conv] quick=GREETING | {elapsed:.0f}ms")
-            return self._build_result("GREETING", 0.99, _get_greeting_reply(message))
 
-        if len(lower_clean) <= 40 and any(lower_clean.startswith(g) or lower_clean == g for g in HOWRU_WORDS):
-            elapsed = (time.monotonic() - t0) * 1000
-            self.logger.info(f"[conv] quick=HOWRU | {elapsed:.0f}ms")
-            return self._build_result("GREETING", 0.99, random.choice(HOWRU_REPLIES))
-
+        # Bütçe sorgularını hızlı yönlendir
         if any(kw in lower_clean for kw in BUDGET_KEYWORDS):
             self.logger.info("[conv] quick=BUDGET_QUERY")
             reply = await self._handle_budget_query(message, budget_info, user_id)
@@ -145,15 +141,33 @@ class ConversationAgent(BaseAgent):
                     f"\nÖnceki arama sorgusu: \"{prev_query}\"\n"
                     f"Önerilen ürünler: {names_str}"
                 )
+
+            personality_block = ""
+            if personality:
+                s_type = personality.get("spending_type", "dengeli").upper()
+                strengths = ", ".join(personality.get("strengths", [])) if personality.get("strengths") else ""
+                weaknesses = ", ".join(personality.get("weaknesses", [])) if personality.get("weaknesses") else ""
+                recs = personality.get("recommendations", "")
+                personality_block = f"\nKullanıcı Harcama Profili: {s_type}\n"
+                if strengths:
+                    personality_block += f"- Güçlü Yönleri: {strengths}\n"
+                if weaknesses:
+                    personality_block += f"- Zayıf Yönleri: {weaknesses}\n"
+                if recs:
+                    personality_block += f"- Öneri Tavsiyesi: {recs}\n"
+
             # .format() yerine manuel replace — prev_query/product_names içinde
             # süslü parantez { } olursa format() KeyError fırlatır.
             prompt = (
                 INTENT_CLASSIFICATION_PROMPT
                 .replace("{history_text}", history_text or "(geçmiş yok)")
                 .replace("{context_block}", context_block)
+                .replace("{personality_block}", personality_block)
                 .replace("{message}", message)
             )
-            result = await self.call_llm_json(prompt, system=INTENT_SYSTEM)
+
+            system_prompt = f"{CONVERSATION_SYSTEM_PROMPT}\n\n{INTENT_SYSTEM}"
+            result = await self.call_llm_json(prompt, system=system_prompt)
 
             intent = result.get("intent", "CHITCHAT").upper()
             confidence = float(result.get("confidence", 0.5))
@@ -181,11 +195,30 @@ class ConversationAgent(BaseAgent):
             self.logger.error(f"[conv] LLM error: {e}")
             # Fallback: keyword varlığına göre tahmin
             has_product_kw = any(kw in lower_clean for kw in PRODUCT_KEYWORDS)
-            intent = "PRODUCT_SEARCH" if has_product_kw else "CHITCHAT"
-            confidence = 0.6
-            reply = None if intent == "PRODUCT_SEARCH" else random.choice(QUICK_REPLIES.get("tesekkur", ["Ne demek! 😊"]))
+            is_greeting = any(lower_clean.startswith(g) or lower_clean == g for g in GREETING_WORDS)
+            is_howru = any(lower_clean.startswith(g) or lower_clean == g for g in HOWRU_WORDS)
+            
+            if has_product_kw:
+                intent = "PRODUCT_SEARCH"
+                confidence = 0.6
+                reply = None
+                extracted_query = message
+            elif is_greeting:
+                intent = "GREETING"
+                confidence = 0.9
+                reply = _get_greeting_reply(message)
+                extracted_query = None
+            elif is_howru:
+                intent = "GREETING"
+                confidence = 0.9
+                reply = random.choice(HOWRU_REPLIES)
+                extracted_query = None
+            else:
+                intent = "CHITCHAT"
+                confidence = 0.6
+                reply = random.choice(QUICK_REPLIES.get("tesekkur", ["Ne demek! 😊"]))
+                extracted_query = None
             comparison_products = []
-            extracted_query = message if intent == "PRODUCT_SEARCH" else None
 
         if intent == "BUDGET_QUERY" and not reply:
             reply = await self._handle_budget_query(message, budget_info, user_id)
