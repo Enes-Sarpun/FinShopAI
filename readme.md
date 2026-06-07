@@ -1,128 +1,128 @@
 # 🛒 FinShop AI
 
-## "Cüzdanını Bilen Akıllı Alışveriş Asistanı"
+## "The Smart Shopping Assistant That Knows Your Wallet"
 
-FinShop AI, finans (FinTech) ve e-ticaret temalarını yenilikçi bir şekilde birleştiren, **çoklu-ajanlı (multi-agent) yapay zeka mimarisine** dayalı akıllı bir alışveriş ve bütçe yönetim platformudur. 
+FinShop AI is an intelligent shopping and budget management platform based on a **multi-agent AI architecture** that innovatively combines financial (FinTech) and e-commerce themes.
 
-Platform, kullanıcıların harcama alışkanlıklarını, kişilik özelliklerini ve anlık bütçe durumlarını analiz ederek kişiselleştirilmiş bir alışveriş deneyimi sunar. Klasik e-ticaret platformlarının aksine FinShop AI, "daha fazla harcatmayı" değil, "daha akıllı ve bütçe dostu harcatmayı" hedefler.
-
----
-
-## 🚀 Proje Amacı ve Vizyonu
-
-Günümüzde kullanıcılar, e-ticaret sitelerinin teşvik edici yapısı nedeniyle genellikle bütçelerini aşmakta ve ihtiyaç dışı harcamalar yapmaktadır. FinShop AI bu problemi çözmek için:
-- Kullanıcının bütçesini ve harcama alışkanlıklarını analiz eder.
-- Özel bir "Kişilik Testi" ile kullanıcının harcama profilini (savruk, dengeli, tutumlu vb.) çıkarır.
-- Gelişmiş AI ajanları sayesinde kullanıcıyla doğal bir sohbet yürütür ve ona özel, fiyat-performans odaklı ürün önerileri sunar.
+The platform offers a personalized shopping experience by analyzing users' spending habits, personality traits, and real-time budget status. Unlike traditional e-commerce platforms, FinShop AI does not aim to make users "spend more," but rather to make them "spend smarter and budget-friendly."
 
 ---
 
-## 🧠 Gelişmiş Agentic AI Mimarisi
+## 🚀 Project Goal and Vision
 
-Sistemin kalbinde, **LangChain** ve **LangGraph** ile orkestre edilen, Google Gemini destekli kompleks bir Çoklu-Ajan (Multi-Agent) sistemi yatmaktadır. Her bir ajan, belirli bir uzmanlık alanında görev yapar ve kusursuz bir uyum içinde çalışır:
-
-- 🧱 **Base Agent:** Tüm ajanların miras aldığı soyut temel sınıf. LLM çağrıları, loglama, zamanlama ve hata yönetimi altyapısını sağlar.
-- 👮 **Security Agent:** Kullanıcı girdilerini denetler, prompt injection ve zararlı içeriklere karşı sistemi korur.
-- 🗣️ **Conversation Agent:** Kullanıcı ile doğal, empati kurabilen ve bağlama uygun bir diyalog yürütür.
-- 🕵️ **Search Agent:** SerpApi vb. araçları kullanarak internet üzerinde anlık ve en doğru ürün araştırmasını yapar.
-- 🧠 **Personality Agent:** Kullanıcının kişilik tipine göre harcama psikolojisini analiz eder.
-- 💰 **Budget Agent:** Kullanıcının finansal durumunu takip eder ve ürün önerilerinin bütçe sınırları içinde kalmasını sağlar.
-- 🎯 **Recommendation Agent:** Arama sonuçlarını, bütçe kısıtlarını ve kullanıcı profilini harmanlayarak en ideal ürünleri belirler.
-- ⚖️ **Review Agent:** Önerilecek ürünlerin kalitesini, kullanıcı yorumlarını ve fiyat-performans oranını değerlendirir.
-- ⭐ **Watchlist Agent:** Kullanıcının ilgilendiği veya favoriye aldığı ürünleri yönetir.
-- 🎼 **Orchestrator:** Tüm bu ajanlar arasındaki veri akışını, karar mekanizmalarını ve görev sıralamasını yöneten ana kontrolcüdür.
+Today, users often exceed their budgets and make impulsive purchases due to the encouraging structure of e-commerce sites. FinShop AI solves this problem by:
+- Analyzing the user's budget and spending habits.
+- Determining the user's spending profile (impulsive, balanced, frugal, etc.) with a custom "Personality Test."
+- Conducting a natural dialogue with the user through advanced AI agents and offering personalized, price-performance-oriented product recommendations.
 
 ---
 
-## 🏗️ Kullanılan Teknolojiler
+## 🧠 Advanced Agentic AI Architecture
 
-Proje, güncel, yüksek performanslı ve ölçeklenebilir teknolojiler kullanılarak inşa edilmiştir:
+At the heart of the system lies a complex Multi-Agent system powered by Google Gemini, orchestrated with **LangChain** and **LangGraph**. Each agent functions in a specific area of expertise and works in perfect harmony:
+
+- 🧱 **Base Agent:** The abstract base class inherited by all agents. It provides the infrastructure for LLM calls, logging, timing, and error handling.
+- 👮 **Security Agent:** Inspects user inputs, protecting the system against prompt injection and harmful content.
+- 🗣️ **Conversation Agent:** Conducts a natural, empathetic, and context-aware dialogue with the user.
+- 🕵️ **Search Agent:** Conducts instant and highly accurate product research on the internet using tools like SerpApi.
+- 🧠 **Personality Agent:** Analyzes spending psychology based on the user's personality type.
+- 💰 **Budget Agent:** Tracks the user's financial status and ensures product recommendations remain within budget limits.
+- 🎯 **Recommendation Agent:** Determines the ideal products by blending search results, budget constraints, and the user profile.
+- ⚖️ **Review Agent:** Evaluates the quality, user reviews, and price-performance ratio of the products to be recommended.
+- ⭐ **Watchlist Agent:** Manages the products the user is interested in or has favorited.
+- 🎼 **Orchestrator:** The main controller that manages the data flow, decision mechanisms, and task sequencing between all these agents.
+
+---
+
+## 🏗️ Technologies Used
+
+The project is built using modern, high-performance, and scalable technologies:
 
 ### 🎨 Frontend
 - **Framework:** Next.js 14 (App Router)
-- **Kütüphane:** React 18, TypeScript
-- **Stil & UI:** Tailwind CSS 3, Framer Motion, lucide-react
-- **Grafik & Veri Görselleştirme:** Recharts
-- **Çoklu Dil (i18n):** i18next, react-i18next
+- **Library:** React 18, TypeScript
+- **Styling & UI:** Tailwind CSS 3, Framer Motion, lucide-react
+- **Charts & Data Visualization:** Recharts
+- **Multi-language (i18n):** i18next, react-i18next
 
 ### ⚙️ Backend
 - **Framework:** FastAPI (Python)
-- **Veritabanı:** Supabase (PostgreSQL)
-- **AI & LLM:** Google Gemini API, LangChain, LangGraph , Manus API
-- **Arama Motoru Entegrasyonu:** SerpApi (google-search-results)
-- **Güvenlik & Auth:** JWT Authentication, passlib, python-jose, slowapi
+- **Database:** Supabase (PostgreSQL)
+- **AI & LLM:** Google Gemini API, LangChain, LangGraph, Manus API
+- **Search Engine Integration:** SerpApi (google-search-results)
+- **Security & Auth:** JWT Authentication, passlib, python-jose, slowapi
 
 ---
 
-## 📂 Proje Yapısı
+## 📂 Project Structure
 
 ```bash
 FinShop-AI/
 │
-├── backend/                        # FastAPI tabanlı asenkron backend servisleri
-│   ├── app/                        # Ana uygulama çekirdeği
-│   │   ├── agents/                 # 🤖 AI Ajan Katmanı (base_agent + 9 uzman ajan)
-│   │   ├── api/                    # REST API Endpoint'leri
-│   │   │   └── routes/             # Rota tanımları (auth, chat, budget vb.)
-│   │   ├── core/                   # Yapılandırma, güvenlik ve loglama
-│   │   ├── models/                 # Pydantic veri modelleri
-│   │   ├── prompts/                # AI sistem promptları
-│   │   └── services/               # İş mantığı servisleri
-│   │       └── llm/                # LLM Client'lar (Gemini, Manus)
-│   ├── scripts/                    # Otomasyon betikleri ve seed scriptleri
-│   ├── tests/                      # Birim ve entegrasyon testleri
-│   ├── logs/                       # Uygulama logları
-│   ├── requirements.txt            # Python bağımlılıkları
-│   └── *_schema.sql                # Veritabanı şemaları (Supabase, Watchlist, Security Logs)
+├── backend/                        # FastAPI-based asynchronous backend services
+│   ├── app/                        # Main application core
+│   │   ├── agents/                 # 🤖 AI Agent Layer (base_agent + 9 specialized agents)
+│   │   ├── api/                    # REST API Endpoints
+│   │   │   └── routes/             # Route definitions (auth, chat, budget, etc.)
+│   │   ├── core/                   # Configuration, security, and logging
+│   │   ├── models/                 # Pydantic data models
+│   │   ├── prompts/                # AI system prompts
+│   │   └── services/               # Business logic services
+│   │       └── llm/                # LLM Clients (Gemini, Manus)
+│   ├── scripts/                    # Automation scripts and seed scripts
+│   ├── tests/                      # Unit and integration tests
+│   ├── logs/                       # Application logs
+│   ├── requirements.txt            # Python dependencies
+│   └── *_schema.sql                # Database schemas (Supabase, Watchlist, Security Logs)
 │
-├── frontend/                       # Next.js 14 tabanlı modern web arayüzü
+├── frontend/                       # Next.js 14-based modern web interface
 │   ├── app/                        # Next.js App Router
-│   │   ├── login/                  # Giriş sayfası
-│   │   ├── register/               # Kayıt sayfası
-│   │   ├── onboarding/             # Kullanıcı karşılama akışı
-│   │   │   ├── personality/        # Kişilik testi
-│   │   │   └── budget/             # Bütçe bilgisi girişi
-│   │   ├── dashboard/              # Ana kontrol paneli
-│   │   │   └── components/         # Dashboard bileşenleri (10 komponent)
-│   │   ├── chat/                   # AI Alışveriş Asistanı
-│   │   │   └── history/            # Geçmiş sohbetler
-│   │   ├── watchlist/              # Favori / takip edilen ürünler
-│   │   ├── settings/               # Ayarlar
-│   │   │   └── account/            # Hesap ayarları
-│   │   └── support/                # Destek sayfası
-│   ├── hooks/                      # Özel React Hook'ları
-│   ├── lib/                        # API bağlantıları, i18n ve yardımcı araçlar
-│   └── types/                      # TypeScript tip tanımlamaları
+│   │   ├── login/                  # Login page
+│   │   ├── register/               # Register page
+│   │   ├── onboarding/             # User onboarding flow
+│   │   │   ├── personality/        # Personality test
+│   │   │   └── budget/             # Budget information input
+│   │   ├── dashboard/              # Main control dashboard
+│   │   │   └── components/         # Dashboard components (10 components)
+│   │   ├── chat/                   # AI Shopping Assistant
+│   │   │   └── history/            # Past chats
+│   │   ├── watchlist/              # Favorited / tracked products
+│   │   ├── settings/               # Settings
+│   │   │   └── account/            # Account settings
+│   │   └── support/                # Support page
+│   ├── hooks/                      # Custom React Hooks
+│   ├── lib/                        # API connections, i18n, and utility tools
+│   └── types/                      # TypeScript type definitions
 │
-├── Images/                         # Proje görselleri ve sunum materyalleri
-├── .gitignore                      # Git tarafından yok sayılacak dosyalar
-└── readme.md                       # Proje tanıtım ve kurulum dökümanı
+├── Images/                         # Project images and presentation materials
+├── .gitignore                      # Files to be ignored by Git
+└── readme.md                       # Project introduction and installation guide
 ```
 
 ---
 
-## ⚙️ Kurulum ve Çalıştırma
+## ⚙️ Installation and Running
 
-Projeyi yerel ortamınızda çalıştırmak için aşağıdaki adımları izleyebilirsiniz.
+You can follow the steps below to run the project in your local environment.
 
-### 1️⃣ Projeyi Klonlayın
+### 1️⃣ Clone the Project
 
 ```bash
 git clone <repo-link>
 cd FinShop-AI
 ```
 
-### 2️⃣ Backend Kurulumu
+### 2️⃣ Backend Installation
 
-Backend'in çalışabilmesi için `.env` dosyanızı oluşturmalı ve API anahtarlarını (Gemini, Supabase vb.) girmelisiniz.
+To run the backend, you must create your `.env` file and enter your API keys (Gemini, Supabase, etc.).
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows için: venv\Scripts\activate
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Çevresel değişkenleri yapılandırın (backend/.env dosyasını oluşturun)
+# Configure environment variables (create backend/.env file)
 # GEMINI_API_KEY=...
 # SUPABASE_URL=...
 # SUPABASE_KEY=...
@@ -130,97 +130,98 @@ pip install -r requirements.txt
 # MANUS_API_KEY=...
 # SERPAPI_KEY=...
 
-# Sunucuyu başlatın
+# Start the server
 uvicorn app.main:app --reload
 ```
 
-### 3️⃣ Frontend Kurulumu
+### 3️⃣ Frontend Installation
 
-Yeni bir terminal açın ve frontend klasörüne gidin. Frontend için de `.env.local` dosyası oluşturmanız gerekmektedir.
+Open a new terminal and navigate to the frontend folder. You also need to create a `.env.local` file for the frontend.
 
 ```bash
 cd frontend
 
-# Çevresel değişkeni oluşturun
+# Create environment variable
 echo NEXT_PUBLIC_API_URL=http://localhost:8000 > .env.local
 
-# Bağımlılıkları yükleyin
+# Install dependencies
 npm install
 
-# Geliştirme sunucusunu başlatın
+# Start the development server
 npm run dev
 ```
-İki ayrı terminalde backend ve frontend'i çalıştırarak http://localhost:3000 adresinde projemizi test edebilirsiniz.
+By running the backend and frontend in two separate terminals, you can test our project at http://localhost:3000.
 
 ---
 
-## 📸 Proje Görselleri ve Çalışma Zamanı (Runtime) Akışları
+## 📸 Project Images and Runtime Flows
 
-Projenin temel modüllerinin, kullanıcı arayüzü etkileşimlerinin ve yapay zeka ajan entegrasyonlarının canlı çalışma akışları aşağıda detaylandırılmıştır:
+The live working flows of the project's core modules, user interface interactions, and AI agent integrations are detailed below:
 
-### 🌐 1. Platform Vizyonu ve "Nasıl Çalışır?" Akışı
-Kullanıcıyı karşılayan modern, animasyonlu Landing Page arayüzü. Bu akışta platformun temel felsefesi, sunduğu çözümler, projenin işleyiş adımları ve kullanıcıyı finansal farkındalığa hazırlayan ilk etkileşim katmanı gösterilmektedir.
+### 🌐 1. Platform Vision and "How It Works" Flow
+A modern, animated Landing Page interface greeting the user. This flow demonstrates the platform's core philosophy, the solutions it offers, the project execution steps, and the first interaction layer preparing the user for financial awareness.
 
 ![FinShop AI Landing Flow](Images/finshop4.gif)
 
-### 🔐 2. Güvenli Kimlik Doğrulama ve Kayıt Akışı
-Supabase altyapısı kullanılarak tasarlanan, JWT (JSON Web Token) tabanlı güvenli kimlik doğrulama (Authentication) mimarisi. Kullanıcının sisteme ilk defa kayıt olma ve güvenli oturum açma süreçlerinin arayüz simülasyonu.
+### 🔐 2. Secure Authentication and Registration Flow
+Secure authentication (Authentication) architecture based on JWT (JSON Web Token) designed using Supabase infrastructure. Interface simulation of the user registering for the first time and starting a secure session.
 
 ![FinShop AI Auth Flow](Images/finshop1.gif)
 
-### 📊 3. Dinamik Dashboard ve Proaktif Bütçe Analizi
-Sisteme giriş yapıldıktan sonra Next.js dashboard'un asenkron olarak yüklenme anı. Kullanıcının Supabase'den çekilen anlık bütçe kartları, harcama limitleri, "Tutumlu Harcayıcı" gibi yapay zeka tarafından analiz edilen finansal profili ve proaktif tasarruf önerilerinin listelenmesi.
+### 📊 3. Dynamic Dashboard and Proactive Budget Analysis
+The moment the Next.js dashboard loads asynchronously after logging into the system. Listing the user's real-time budget cards fetched from Supabase, spending limits, financial profile analyzed by AI such as "Frugal Spender", and proactive savings suggestions.
 
 ![FinShop AI Dashboard Analysis](Images/finshop2.gif)
 
-### 🤖 4. Çoklu Ajan (Multi-Agent) Sistemi ve Akıllı Alışveriş Sohbeti
-Kullanıcının bütçesine göre akıllı telefon ve kılıf arama senaryosu. Girdinin `SecurityAgent` filtresinden geçerek `ConversationAgent` vasıtasıyla anlamlandırılması, bütçe limitlerine göre saniyeler içinde fiyat-performans ve muadil ürün kartlarının dinamik olarak ekrana basılması süreci. Sonrasında "Yıldızlı Ürünler" (Takip Listesi) modülünün çalışma akışı.
+### 🤖 4. Multi-Agent System and Smart Shopping Chat
+Smart phone and case search scenario based on the user's budget. The process where the input passes through the `SecurityAgent` filter, gets processed by the `ConversationAgent`, and price-performance or alternative product cards are dynamically rendered on the screen within seconds according to budget limits. Subsequently, the workflow of the "Starred Products" (Watchlist) module is shown.
 
 ![FinShop AI Agent Chat](Images/finshop3.gif)
 
 
 
-## 👥 Ekip ve Görev Dağılımı
+## 👥 Team and Task Distribution
 
-Bu proje 3 kişilik bir ekip tarafından, her üyenin hem frontend hem backend tarafında aktif görev aldığı bir yapıyla geliştirilmiştir:
+This project was developed by a 3-person team, with each member taking an active role in both frontend and backend development:
 
-- **Üye 1:**
-  - **Frontend:** Navbar, Sidebar, QuickActions, Dashboard düzeni, genel UI/UX tasarımı
+- **Member 1:**
+  - **Frontend:** Navbar, Sidebar, QuickActions, Dashboard layout, general UI/UX design
   - **Backend:** Search Agent, Conversation Agent, Orchestrator
 
-- **Üye 2:**
+- **Member 2:**
   - **Frontend:** BudgetCards, ExpenseTracker, AddExpenseModal
-  - **Backend:** Budget Agent, Personality Agent, Recommendation Agent, Supabase şema tasarımı
+  - **Backend:** Budget Agent, Personality Agent, Recommendation Agent, Supabase schema design
 
-- **Üye 3:**
-  - **Frontend:** SavingsTips, ChatPreview, WishlistWidget, DailyTip, Watchlist sayfası
-  - **Backend:** Watchlist Agent, Review Agent, Security Agent, Manus API entegrasyonu
-
----
-
-## 🎯 Yarışma Teması ve Hedefler
-
-**FinShop AI**, Finans ve E-Ticaret temalı yarışma kapsamında, aşağıdaki hedeflere ulaşmak amacıyla tasarlanmıştır:
-1. Kullanıcılarda finansal farkındalık ve bütçe disiplini oluşturmak.
-2. İnternet üzerindeki bilgi kirliliğini ajanlar aracılığıyla filtreleyerek nokta atışı alışveriş deneyimi sunmak.
-3. E-ticareti, yapay zeka destekli bir finans danışmanlığı süreci ile birleştirmek.
+- **Member 3:**
+  - **Frontend:** SavingsTips, ChatPreview, WishlistWidget, DailyTip, Watchlist page
+  - **Backend:** Watchlist Agent, Review Agent, Security Agent, Manus API integration
 
 ---
 
-## 💌 Test İçin Kullanıcı Giriş Bilgileri
+## 🎯 Competition Theme and Goals
 
-- **E-Posta:** deneme@test.com
-- **Şifre:** test1234
+**FinShop AI** is designed within the scope of the Finance and E-Commerce themed competition to achieve the following goals:
+1. Building financial awareness and budget discipline in users.
+2. Offering a pinpoint shopping experience by filtering information pollution on the internet through agents.
+3. Combining e-commerce with an AI-supported financial consultancy process.
+
+---
+
+## 💌 User Credentials for Testing
+
+- **Email:** deneme@test.com
+- **Password:** test1234
   
 ---
 
-## 📄 Lisans
+## 📄 License
 
-Bu proje, eğitim ve yarışma amacıyla açık kaynak olarak geliştirilmiştir.
+> [!WARNING]
+> **Legal Notice:** Developed for a hackathon. All rights reserved. Unauthorized copying, distribution, or usage is prohibited.
 
 ---
 
 <div align="center">
   <b>FinShop AI</b><br>
-  <i>"Cüzdanını Bilen Akıllı Alışveriş Asistanı"</i>
+  <i>"The Smart Shopping Assistant That Knows Your Wallet"</i>
 </div>
