@@ -201,6 +201,7 @@
     "assistantName": "FinShop Assistant",
     "online": "Online",
     "deleteHistory": "Clear History",
+    "heroQuestion": "What can I do for you?",
     "heroSubtitle": "Let's find the best products that fit your budget.",
     "welcome": "Hi! I can help you find products that fit your budget 🛍️",
     "placeholder": "What are you looking for? Product, budget, gift... 🛍️",
