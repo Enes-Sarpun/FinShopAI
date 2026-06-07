@@ -95,12 +95,31 @@ class ConversationAgent(BaseAgent):
     def __init__(self, llm, db):
         super().__init__("conversation_agent", llm, db)
 
+    def _build_system_prompt(self, user_profile: dict | None) -> str:
+        if not user_profile:
+            return CONVERSATION_SYSTEM_PROMPT
+        parts = []
+        name = (user_profile.get("full_name") or "").strip()
+        occupation = (user_profile.get("occupation") or "").strip()
+        extra_info = (user_profile.get("extra_info") or "").strip()
+        if name:
+            parts.append(f"- Kullanıcının adı: {name} (hitap ederken adını kullanabilirsin)")
+        if occupation:
+            parts.append(f"- Mesleği: {occupation}")
+        if extra_info:
+            parts.append(f"- Hakkında ek bilgi: {extra_info}")
+        if not parts:
+            return CONVERSATION_SYSTEM_PROMPT
+        user_ctx = "\n".join(parts)
+        return CONVERSATION_SYSTEM_PROMPT + f"\n\nKULLANICI PROFİLİ:\n{user_ctx}"
+
     async def execute(self, input_data: dict) -> dict:
         t0 = time.monotonic()
         message = input_data.get("message", "").strip()
         history = input_data.get("chat_history", [])
         budget_info = input_data.get("budget_info")
         user_id = input_data.get("user_id")
+        user_profile = input_data.get("user_profile")
 
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
@@ -153,7 +172,8 @@ class ConversationAgent(BaseAgent):
                 .replace("{context_block}", context_block)
                 .replace("{message}", message)
             )
-            result = await self.call_llm_json(prompt, system=INTENT_SYSTEM)
+            system_prompt = self._build_system_prompt(user_profile)
+            result = await self.call_llm_json(prompt, system=system_prompt or INTENT_SYSTEM)
 
             intent = result.get("intent", "CHITCHAT").upper()
             confidence = float(result.get("confidence", 0.5))
@@ -194,7 +214,7 @@ class ConversationAgent(BaseAgent):
             if not reply:
                 try:
                     complaint_prompt = COMPLAINT_REPLY_PROMPT.format(message=message)
-                    reply = await self.call_llm(complaint_prompt, system=CONVERSATION_SYSTEM_PROMPT)
+                    reply = await self.call_llm(complaint_prompt, system=self._build_system_prompt(user_profile))
                 except Exception:
                     reply = "Üzgünüm, yaşadığın sorun için özür dilerim 🙏 Farklı bir arama deneyelim mi?"
 
@@ -241,7 +261,7 @@ class ConversationAgent(BaseAgent):
                 budget_info=budget_summary,
                 message=message,
             )
-            return await self.call_llm(prompt, system=CONVERSATION_SYSTEM_PROMPT)
+            return await self.call_llm(prompt, system=self._build_system_prompt(None))
         except Exception:
             return "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
 

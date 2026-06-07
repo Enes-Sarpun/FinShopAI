@@ -72,6 +72,11 @@
     "avatarSaveFailed": "Fotoğraf kaydedilemedi.",
     "avatarReadFailed": "Görsel okunamadı.",
     "useInitials": "Baş Harflerle Devam Et",
+    "personalization": "Kişiselleştirme",
+    "personalizationDesc": "Bu bilgiler asistanın sana daha iyi hitap etmesini ve önerileri kişiselleştirmesini sağlar.",
+    "occupation": "Meslek",
+    "extraInfo": "Ekstra Bilgiler",
+    "extraInfoPlaceholder": "Alışveriş tercihlerin, ilgi alanların veya asistana bildirmek istediğin herhangi bir şey...",
     "editBanner": "Düzenle",
     "chooseBannerStyle": "Banner Rengi",
     "selectBannerStyle": "Bir banner stili seçin"

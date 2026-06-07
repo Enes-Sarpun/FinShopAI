@@ -72,6 +72,11 @@
     "avatarSaveFailed": "Failed to save photo.",
     "avatarReadFailed": "Could not read image.",
     "useInitials": "Use Initials",
+    "personalization": "Personalization",
+    "personalizationDesc": "This information helps the assistant address you better and personalize recommendations.",
+    "occupation": "Occupation",
+    "extraInfo": "Extra Information",
+    "extraInfoPlaceholder": "Your shopping preferences, interests, or anything you'd like the assistant to know...",
     "editBanner": "Edit",
     "chooseBannerStyle": "Banner Color",
     "selectBannerStyle": "Select a banner style"

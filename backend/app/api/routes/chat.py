@@ -71,12 +71,15 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             except Exception as _e:
                 _chat_logger.warning(f"[chat] budget prefetch failed: {_e}")
 
+        user_profile = await db.get_profile(user_id)
+
         conv_agent = ConversationAgent(llm=llm, db=db)
         conv_result = await conv_agent.execute({
             "message": body.message,
             "chat_history": history,
             "budget_info": budget_info,
             "user_id": user_id,
+            "user_profile": user_profile,
         })
 
         user_metadata: dict = {"is_product_request": conv_result["is_product_request"]}

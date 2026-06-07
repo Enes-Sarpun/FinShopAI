@@ -19,7 +19,9 @@ class AvatarUpdateRequest(BaseModel):
 
 
 class ProfileUpdateRequest(BaseModel):
-    full_name: str = Field(min_length=1, max_length=100)
+    full_name: str | None = Field(default=None, max_length=100)
+    occupation: str | None = Field(default=None, max_length=100)
+    extra_info: str | None = Field(default=None, max_length=500)
 
 
 @router.post("/register")
@@ -100,8 +102,15 @@ async def update_profile(
     user_id = current_user["sub"]
     try:
         db = SupabaseService()
-        await db.upsert_profile({"id": user_id, "full_name": body.full_name.strip()})
-        return {"success": True, "full_name": body.full_name.strip()}
+        update_data: dict = {"id": user_id}
+        if body.full_name is not None:
+            update_data["full_name"] = body.full_name.strip()
+        if body.occupation is not None:
+            update_data["occupation"] = body.occupation.strip()
+        if body.extra_info is not None:
+            update_data["extra_info"] = body.extra_info.strip()
+        await db.upsert_profile(update_data)
+        return {"success": True, **{k: v for k, v in update_data.items() if k != "id"}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
