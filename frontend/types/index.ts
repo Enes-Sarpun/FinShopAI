@@ -121,6 +121,7 @@ export interface ChatResponse {
   conversation_id?: string | null;
   over_budget_products?: Product[];
   budget_exceeded_warning?: BudgetExceededWarning | null;
+  timing?: Record<string, number>;
 }
 
 export interface ChatHistory {

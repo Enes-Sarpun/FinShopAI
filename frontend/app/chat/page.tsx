@@ -30,6 +30,14 @@ interface Msg {
 
 const WELCOME: Msg[] = [];
 
+const PRODUCT_SEARCH_STEPS = [
+  "Düşünülüyor",
+  "Ürün kategorisi analiz ediliyor",
+  "Fiyat aralığı hesaplanıyor",
+  "Seçenekler getiriliyor",
+  "Sonuçlar hazırlanıyor",
+];
+
 function loadFromStorage(key: string): Msg[] | null {
   if (typeof window === "undefined") return null;
   try {
@@ -55,6 +63,8 @@ function ChatPageInner() {
   const [messages, setMessages] = useState<Msg[]>(WELCOME);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [productSteps, setProductSteps] = useState<string[]>([]);
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -179,17 +189,59 @@ function ChatPageInner() {
     }
   }
 
+  // Basit client-side ürün arama tespiti — adımları gösterip göstermeyeceğimize karar verir
+  function looksLikeProductSearch(text: string): boolean {
+    const t = text.toLowerCase();
+    const productHints = [
+      "öner", "arıyorum", "satın", "hediye", "almak", "lazım",
+      "ucuz", "uygun", "fiyat", "ürün", "laptop", "telefon",
+      "bilgisayar", "kulaklık", "tablet", "saat", "ayakkabı",
+      "tv", "kamera", "klavye", "mouse", "monitör", "şarj",
+      "iphone", "samsung", "xiaomi", "apple", "huawei", "sony",
+      "alternatif", "karşılaştır", "indirim",
+    ];
+    return productHints.some((kw) => t.includes(kw));
+  }
+
   async function send(text: string) {
     if (!text.trim() || sending) return;
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "auto";
     setMessages((prev) => [...prev, { role: "user", text }]);
     setSending(true);
+    setProductSteps([]);
 
     const sendingThreadId = activeThreadId.current;
+    const isLikelyProduct = looksLikeProductSearch(text);
 
     try {
-      const data = await chatApi.send(text, sendingThreadId) as ChatResponse;
+      const apiPromise = chatApi.send(text, sendingThreadId) as Promise<ChatResponse>;
+
+      let stepsDone = false;
+      let stepIndex = 0;
+      const STEP_INTERVAL = 3800;
+
+      if (isLikelyProduct) {
+        // Adımları hemen başlat, 3 nokta gösterme
+        setSending(false);
+        setProductSteps([PRODUCT_SEARCH_STEPS[0]]);
+
+        const advanceStep = () => {
+          if (stepsDone) return;
+          stepIndex++;
+          setProductSteps(PRODUCT_SEARCH_STEPS.slice(0, stepIndex + 1));
+          if (stepIndex < PRODUCT_SEARCH_STEPS.length - 1) {
+            stepTimerRef.current = setTimeout(advanceStep, STEP_INTERVAL);
+          }
+        };
+        stepTimerRef.current = setTimeout(advanceStep, STEP_INTERVAL);
+      }
+      // isLikelyProduct === false ise sending=true kalır → TypingIndicator (3 nokta) görünür
+
+      // API cevabını bekle
+      const data = await apiPromise;
+      stepsDone = true;
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
 
       const returnedConvId = data.conversation_id ?? null;
       if (!sendingThreadId && returnedConvId) {
@@ -207,12 +259,21 @@ function ChatPageInner() {
       }
 
       if (!data.is_product_request) {
+        setProductSteps([]);
         setMessages((prev) => [...prev, {
           role: "bot",
           text: data.reply || "Başka bir konuda yardımcı olabilir miyim?",
         }]);
         return;
       }
+
+      // Ürün araması — kalan adımları hızlıca tikle, sonra sonuçları göster
+      for (let i = stepIndex + 1; i <= PRODUCT_SEARCH_STEPS.length; i++) {
+        setProductSteps(PRODUCT_SEARCH_STEPS.slice(0, i));
+        await new Promise((r) => setTimeout(r, 280));
+      }
+      await new Promise((r) => setTimeout(r, 350));
+      setProductSteps([]);
 
       const newMsgs: Msg[] = [];
       if (data.recommendation?.summary)
@@ -245,7 +306,9 @@ function ChatPageInner() {
             : raw;
       setMessages((prev) => [...prev, { role: "bot", text: `⚠️ ${msg}` }]);
     } finally {
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
       setSending(false);
+      setProductSteps([]);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }
@@ -389,7 +452,12 @@ function ChatPageInner() {
               })}
             </AnimatePresence>
 
-            {sending && <TypingIndicator />}
+            <AnimatePresence>
+              {sending && <TypingIndicator key="typing" />}
+              {productSteps.length > 0 && (
+                <ProductStepsIndicator key="steps" steps={productSteps} allSteps={PRODUCT_SEARCH_STEPS} />
+              )}
+            </AnimatePresence>
             {loadingThread && <ThreadSkeleton />}
             <div ref={bottomRef} />
           </div>
@@ -485,68 +553,86 @@ function BotBubble({ text, budgetStatus }: { text: string; budgetStatus?: string
   );
 }
 
+// Sadece sohbet/chitchat için — basit 3 nokta
 function TypingIndicator() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const steps = [
-    "Düşünüyor",
-    "Ürün kategorisi analiz ediliyor",
-    "Fiyat aralığı hesaplanıyor",
-    "Seçenekler getiriliyor",
-    "Sonuçlar hazırlanıyor"
-  ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentStep((prev) => prev >= steps.length - 1 ? prev : prev + 1);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <motion.div
       className="flex justify-start gap-3"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4 }}
+      transition={{ duration: 0.2 }}
     >
       <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
         <Sparkles className="w-3.5 h-3.5 text-white" />
       </div>
-      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm space-y-1.5">
-        {steps.map((step, index) => (
-          <motion.div
-            key={index}
-            className="flex items-center gap-2.5"
-            animate={{ opacity: index <= currentStep ? 1 : 0.25 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-              {index < currentStep && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="text-emerald-500 font-bold text-sm"
-                >✓</motion.span>
-              )}
-              {index === currentStep && (
-                <motion.div
-                  animate={{
-                    scale: [1, 1.1, 1],
-                    opacity: [0.8, 1, 0.8],
-                  }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <Sparkles className="w-4 h-4 text-blue-500" />
-                </motion.div>
-              )}
-              {index > currentStep && (
-                <span className="w-1.5 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full inline-block" />
-              )}
-            </div>
-            <span className={`text-xs ${index <= currentStep ? "text-gray-700 dark:text-gray-300 font-medium" : "text-gray-400 dark:text-gray-600"}`}>
-              {step}
-            </span>
-          </motion.div>
+      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="w-1.5 h-1.5 bg-blue-400 rounded-full inline-block"
+            animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+            transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+          />
         ))}
+      </div>
+    </motion.div>
+  );
+}
+
+// Sadece ürün araması için — adımlı şeffaf geçiş
+function ProductStepsIndicator({ steps, allSteps }: { steps: string[]; allSteps: string[] }) {
+  return (
+    <motion.div
+      className="flex justify-start gap-3"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm space-y-1.5 min-w-[220px]">
+        <AnimatePresence initial={false}>
+          {allSteps.map((step, index) => {
+            const isVisible = index < steps.length;
+            const isDone = index < steps.length - 1;
+            const isCurrent = index === steps.length - 1;
+            if (!isVisible) return null;
+            return (
+              <motion.div
+                key={step}
+                className="flex items-center gap-2.5"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                  {isDone && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-emerald-500 font-bold text-sm leading-none"
+                    >✓</motion.span>
+                  )}
+                  {isCurrent && (
+                    <motion.div
+                      animate={{ scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
+                      transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                    </motion.div>
+                  )}
+                </div>
+                <span className={`text-xs leading-tight ${isDone ? "text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-200 font-medium"}`}>
+                  {step}
+                </span>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
