@@ -46,8 +46,6 @@ function saveToStorage(key: string, msgs: Msg[]) {
 
 interface UserInfo { full_name?: string; email?: string; }
 
-// Kredi göstergesi — ileride API'den çekilecek
-const CREDITS_DISPLAY = "1.300";
 
 function ChatPageInner() {
   const { t } = useTranslation();
@@ -328,9 +326,9 @@ function ChatPageInner() {
 
           {/* Sağ: Kredi + Geçmişi Sil */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/40">
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{CREDITS_DISPLAY}</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <Zap className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-xs font-medium text-gray-400 dark:text-gray-500">Kredi — Yakında</span>
             </div>
             <button
               onClick={deleteHistory}

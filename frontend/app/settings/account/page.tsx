@@ -344,7 +344,15 @@ export default function AccountPage() {
     : "?";
 
   async function saveName(name: string) {
-    setUser((prev) => prev ? { ...prev, full_name: name } : prev);
+    const prev = user?.full_name;
+    setUser((u) => u ? { ...u, full_name: name } : u);
+    try {
+      await authApi.updateProfile(name);
+      toast.success(t("account.fullName") + " güncellendi");
+    } catch {
+      setUser((u) => u ? { ...u, full_name: prev ?? "" } : u);
+      toast.error("İsim kaydedilemedi, tekrar dene.");
+    }
   }
 
   return (
