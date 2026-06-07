@@ -207,10 +207,16 @@ class SearchAgent(BaseAgent):
         budget_was_inferred = False
         if not budget:
             user_budget_metrics = input_data.get("user_budget") or {}
-            spendable = user_budget_metrics.get("spendable_after_savings") or 0
-            # Spesifik ürün (iPhone 16 gibi) için inferred budget uygulanmaz — fiyatı kesmek yanlış sonuç verir
+            spendable = (
+                user_budget_metrics.get("spendable_after_savings")
+                or user_budget_metrics.get("spendable")
+                or 0
+            )
+            # Spesifik ürün (iPhone 16 gibi) için inferred budget uygulanmaz — fiyatı kesmek yanlış sonuç verir.
+            # Ancak yine de bütçe aşım kontrolü yapabilmek için bütçeyi kullanıcının tüm harcanabilir limitine eşitliyoruz.
             if is_specific_product:
-                pass
+                if spendable > 0:
+                    budget = spendable
             elif gift_intent and (recipient or occasion) and spendable > 0:
                 inferred_bgt = infer_budget_from_context(
                     user_budget=user_budget_metrics,
