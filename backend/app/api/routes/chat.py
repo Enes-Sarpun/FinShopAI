@@ -56,10 +56,29 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
         else:
             history = []
 
+        # Paralel olarak kişilik profilini ve gerekirse bütçe bilgisini çek
+        import asyncio as _asyncio
         from app.agents.conversation_agent import BUDGET_KEYWORDS as _BUDGET_MSG_HINTS
         from app.core.logger import get_logger as _get_logger
         import re as _re
         _chat_logger = _get_logger("chat")
+
+        tasks = [db.get_personality(user_id)]
+        need_budget = any(hint in body.message.lower() for hint in _BUDGET_MSG_HINTS)
+        if need_budget:
+            from app.agents.budget_agent import BudgetAgent
+            tasks.append(BudgetAgent(llm=llm, db=db).execute({"action": "analyze", "user_id": user_id}))
+        else:
+            tasks.append(_asyncio.sleep(0))  # Dummy task
+
+        fetched = await _asyncio.gather(*tasks, return_exceptions=True)
+        personality_profile = fetched[0] if not isinstance(fetched[0], Exception) else None
+        
+        budget_info = None
+        if need_budget and not isinstance(fetched[1], Exception) and fetched[1]:
+            budget_info = fetched[1].get("financial_metrics")
+
+        _chat_logger.info(f"[chat] personality prefetched: {bool(personality_profile)}, budget prefetched: {bool(budget_info)}")
         _msg_lower = _re.sub(r"[^\w\s]", " ", body.message.lower())
         budget_info = None
         if any(hint in _msg_lower for hint in _BUDGET_MSG_HINTS):
@@ -81,6 +100,7 @@ async def chat(request: Request, body: ChatRequest, current_user: dict = Depends
             "chat_history": history,
             "budget_info": budget_info,
             "user_id": user_id,
+            "personality": personality_profile,
             "user_profile": user_profile,
         })
 

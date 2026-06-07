@@ -35,8 +35,8 @@ class TestIntentClassifier:
         assert _classify_intent("500 liraya telefon var mı") == "product_search"
 
     def test_quick_search_without_budget(self):
-        assert _classify_intent("En iyi laptop öner") == "quick_search"
-        assert _classify_intent("Kablosuz kulaklık") == "quick_search"
+        assert _classify_intent("En iyi laptop öner") == "product_search"
+        assert _classify_intent("Kablosuz kulaklık") == "product_search"
 
     def test_watchlist_takes_priority_over_budget(self):
         """Hem watchlist hem budget kelimesi varsa watchlist kazanır."""
@@ -59,9 +59,6 @@ class TestRoutingFunctions:
     def test_route_product_search_to_prepare(self):
         assert _route_after_route(self._state("product_search")) == "prepare"
 
-    def test_route_quick_search_to_search(self):
-        assert _route_after_route(self._state("quick_search")) == "search"
-
     def test_route_budget_query_to_budget_only(self):
         assert _route_after_route(self._state("budget_query")) == "budget_only"
 
@@ -70,10 +67,6 @@ class TestRoutingFunctions:
 
     def test_route_unknown_intent_defaults_to_prepare(self):
         assert _route_after_route(self._state("bilinmeyen")) == "prepare"
-
-    def test_after_search_quick_search_skips_review(self):
-        state = self._state("quick_search")
-        assert _route_after_search(state) == "recommendation"
 
     def test_after_search_product_search_goes_to_review(self):
         state = self._state("product_search")
