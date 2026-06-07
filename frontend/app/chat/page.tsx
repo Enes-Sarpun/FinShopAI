@@ -11,7 +11,6 @@ import { useTranslation } from "react-i18next";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { wishlistService } from "@/lib/wishlistService";
-import Sidebar from "@/app/dashboard/components/Sidebar";
 
 function storageKey(id: string | null) {
   return id ? `finshop_thread_v2_${id}` : "finshop_thread_v2_new";
@@ -275,10 +274,7 @@ function ChatPageInner() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg-mesh)" }}>
-      <Sidebar userName={user?.full_name} userEmail={user?.email} />
-
-      <div className="flex flex-col flex-1 min-w-0">
+    <div className="flex flex-col h-screen overflow-hidden" style={{ background: "var(--bg-mesh)" }}>
 
         {/* ── Top Bar ── */}
         <header className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200/60 dark:border-gray-700/60 flex-shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
@@ -344,7 +340,7 @@ function ChatPageInner() {
 
         {/* ── Mesajlar ── */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+          <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
 
             {/* Welcome hero */}
             <AnimatePresence>
@@ -399,7 +395,7 @@ function ChatPageInner() {
 
         {/* ── Input alanı ── */}
         <div className="px-4 pb-5 pt-3 flex-shrink-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-t border-gray-200/40 dark:border-gray-700/40">
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto w-full">
             <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm focus-within:border-blue-400 dark:focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-400/20 transition-all">
               <textarea
                 ref={inputRef}
@@ -427,7 +423,6 @@ function ChatPageInner() {
             </p>
           </div>
         </div>
-      </div>
     </div>
   );
 }
