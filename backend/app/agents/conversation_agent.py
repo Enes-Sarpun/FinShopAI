@@ -152,8 +152,6 @@ class ConversationAgent(BaseAgent):
         # Noktalama temizlenmiş versiyon — keyword matching için
         lower_clean = _re.sub(r"\s+", " ", _re.sub(r"[^\w\s]", " ", lower)).strip()
 
-        # Bütçe sorgularını hızlı yönlendir
-        if any(kw in lower_clean for kw in BUDGET_KEYWORDS):
         has_budget_kw = any(kw in lower_clean for kw in BUDGET_KEYWORDS)
         has_product_kw = any(kw in lower_clean for kw in PRODUCT_KEYWORDS)
         # Sadece bütçe sorusu ise hızlı yanıt ver.
@@ -210,8 +208,6 @@ class ConversationAgent(BaseAgent):
                 .replace("{message}", message)
             )
 
-            system_prompt = f"{CONVERSATION_SYSTEM_PROMPT}\n\n{INTENT_SYSTEM}"
-            result = await self.call_llm_json(prompt, system=system_prompt)
             system_prompt = self._build_system_prompt(user_profile)
             result = await self.call_llm_json(prompt, system=system_prompt or INTENT_SYSTEM)
 
