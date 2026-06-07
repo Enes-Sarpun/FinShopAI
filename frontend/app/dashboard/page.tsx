@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { budgetApi, personalityApi, authApi } from "@/lib/api";
@@ -44,7 +45,7 @@ function SkeletonSection() {
 
 export default function DashboardPage() {
   const { t } = useTranslation();
-  const { userId, loading } = useAuth();
+  const { userId, loading, hasPersonality, hasBudget } = useAuth();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [personality, setPersonality] = useState<Personality | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -55,6 +56,16 @@ export default function DashboardPage() {
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
   }, []);
+
+  const router = useRouter();
+  useEffect(() => {
+    if (loading) return;
+    if (!hasPersonality) {
+      router.replace("/onboarding/personality");
+    } else if (!hasBudget) {
+      router.replace("/onboarding/budget");
+    }
+  }, [loading, hasPersonality, hasBudget, router]);
 
   useEffect(() => {
     if (!userId) return;

@@ -6,6 +6,8 @@ export function useAuth(redirectIfNoToken = true) {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [hasPersonality, setHasPersonality] = useState<boolean | null>(null);
+  const [hasBudget, setHasBudget] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,8 +21,10 @@ export function useAuth(redirectIfNoToken = true) {
 
     setToken(t);
     setUserId(uid);
+    setHasPersonality(localStorage.getItem("has_personality") === "true");
+    setHasBudget(localStorage.getItem("has_budget") === "true");
     setLoading(false);
   }, []);
 
-  return { token, userId, loading };
+  return { token, userId, hasPersonality, hasBudget, loading };
 }

@@ -57,12 +57,16 @@ export const authApi = {
     });
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("user_id", data.user_id);
+    localStorage.setItem("has_personality", String(data.has_personality));
+    localStorage.setItem("has_budget", String(data.has_budget));
     return data;
   },
 
   logout: () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user_id");
+    localStorage.removeItem("has_personality");
+    localStorage.removeItem("has_budget");
     window.location.href = "/login";
   },
 

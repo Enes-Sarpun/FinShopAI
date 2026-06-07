@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { budgetApi } from "@/lib/api";
@@ -30,9 +30,15 @@ const EXPENSE_LABELS: Record<string, string> = {
 
 export default function BudgetPage() {
   const router = useRouter();
-  const { userId, loading } = useAuth();
+  const { userId, loading, hasBudget } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!loading && hasBudget) {
+      router.replace("/dashboard");
+    }
+  }, [loading, hasBudget, router]);
 
   const [income, setIncome] = useState({ salary: "", extra_income: "" });
   const [expenses, setExpenses] = useState({
@@ -61,6 +67,7 @@ export default function BudgetPage() {
         Object.fromEntries(Object.entries(expenses).map(([k, v]) => [k, Number(v) || 0])),
         { savings_goal: Number(savings.savings_goal) || 0, savings_purpose: savings.savings_purpose }
       );
+      localStorage.setItem("has_budget", "true");
       router.push("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Hata oluştu");

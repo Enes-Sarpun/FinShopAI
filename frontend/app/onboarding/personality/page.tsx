@@ -12,12 +12,18 @@ interface Question {
 
 export default function PersonalityPage() {
   const router = useRouter();
-  const { loading } = useAuth();
+  const { loading, hasPersonality, hasBudget } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!loading && hasPersonality) {
+      router.replace(hasBudget ? "/dashboard" : "/onboarding/budget");
+    }
+  }, [loading, hasPersonality, hasBudget, router]);
 
   useEffect(() => {
     personalityApi.getQuestions()
@@ -69,6 +75,7 @@ export default function PersonalityPage() {
     setSubmitting(true);
     try {
       await personalityApi.submit(answers);
+      localStorage.setItem("has_personality", "true");
       router.push("/onboarding/budget");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Hata oluştu");
