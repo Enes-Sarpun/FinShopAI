@@ -18,3 +18,5 @@ class UserResponse(BaseModel):
     full_name: str | None
     avatar_url: str | None
     kvkk_accepted: bool
+    occupation: str | None = None
+    extra_info: str | None = None
