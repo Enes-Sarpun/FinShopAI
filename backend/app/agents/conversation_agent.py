@@ -24,16 +24,27 @@ HOWRU_REPLIES = [
 ]
 
 BUDGET_KEYWORDS = [
+    # Bütçe - doğrudan
     "bütçem", "bütçemi", "bütçemde", "bütçeme", "bütçemle",
     "bütçem ne", "bütçem var", "bütçem kaç", "bütçem nedir",
     "ne kadar bütçe", "bütçem ne kadar", "bütçe durumum", "bütçe bilgi",
     "bütçeye bak", "bütçeyi göster", "bütçeyi görebilir",
+    # Para / harcama
     "param var mı", "param yeter mi", "param ne kadar", "ne kadar param",
     "param kaç", "param nedir", "paramı göster", "param kaldı mı",
-    "harcayabilir miyim", "ne kadar harcadım", "bu ay ne harcadım",
-    "harcama durumum", "mali durum", "finansal durum",
-    "gelir", "maaşım", "aylık gelir",
+    "ne kadar harcadım", "bu ay ne harcadım", "harcama durumum",
     "ne kadar kaldı", "kalan param", "kalan bütçe",
+    # Doğal dil — "harcayabilir miyim / harcayabilirim / harcayabilir miyiz"
+    "harcayabil", "ödeyebilir", "alabilir miyim", "alabilir miyiz",
+    "yetecek mi", "yeter mi bütçe", "yetecek mi bütçem",
+    # Finansal durum
+    "mali durum", "finansal durum", "maaşım", "aylık gelir",
+    # Serbest harcama soruları
+    "ne kadar harcayabilirim", "ne kadar harcayabilir",
+    "bu ay ne kadar", "aylık ne kadar",
+    "ne kadar param var", "ne kadar param kaldı",
+    "bu alışverişi yapabilir miyim", "buna bütçem yeter",
+    "bunu alabilir miyim", "bu ürünü alabilir miyim",
 ]
 
 PRODUCT_KEYWORDS = [
@@ -212,7 +223,9 @@ class ConversationAgent(BaseAgent):
             comparison_products = []
             extracted_query = message if intent == "PRODUCT_SEARCH" else None
 
-        if intent == "BUDGET_QUERY" and not reply:
+        if intent == "BUDGET_QUERY":
+            # LLM'den gelen reply bütçe verisi olmadan üretilmiş olabilir; her durumda
+            # BudgetAgent üzerinden gerçek veriyle yanıt oluştur.
             reply = await self._handle_budget_query(message, budget_info, user_id)
 
         if intent == "COMPLAINT":

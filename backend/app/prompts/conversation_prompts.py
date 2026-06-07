@@ -77,12 +77,16 @@ KARAR KURALLARI:
 4. COMPARISON — İki ürünü karşılaştırma isteği. comparison_products dolu olmalı.
 
 5. BUDGET_QUERY — Kullanıcı kendi bütçesi veya finansal durumu hakkında soru soruyor.
-   Bu mesajlar her zaman BUDGET_QUERY'dir:
-   • "bütçemi görebiliyor musun?", "bütçem ne kadar?", "bütçemi göster"
-   • "ne kadar harcayabilirim?", "param var mı?", "bütçem yeterli mi?"
-   • "bu ay ne kadar harcadım?", "bütçem nasıl?"
-   • "bütçem bu alışverişe yeter mi?"
-   reply alanına bütçeye dair kısa bilgi yazılabilir.
+   Aşağıdaki her türlü ifade BUDGET_QUERY'dir (kelime kelime eşleşme aranma, anlam önemli):
+   • Bütçe/para sorgulama: "bütçemi göster", "bütçem ne kadar?", "param var mı?"
+   • Harcama kapasitesi: "ne kadar harcayabilirim?", "ne kadar harcayabilir miyim?",
+     "ne kadar param kaldı?", "bu ay ne kadar harcayabilirim?"
+   • Yeterlilik sorusu: "bütçem yeterli mi?", "param yeter mi?", "yetecek mi?"
+   • Bu ay durumu: "bu ay ne kadar harcadım?", "bu ay ne kaldı?", "aylık bütçem?"
+   • Alım gücü: "bunu alabilir miyim?", "bu ürünü alabilir miyim?", "buna bütçem yeter mi?"
+   ÖNEMLI: Kullanıcı "ne kadar harcayabilirim" gibi genel finansal kapasite soruyorsa
+   bu KESİNLİKLE BUDGET_QUERY'dir — ürün aramıyor.
+   reply alanını boş bırak (null), bütçe verisi sonradan eklenecek.
 
 6. COMPLAINT — Hayal kırıklığı, şikayet, memnuniyetsizlik.
 
