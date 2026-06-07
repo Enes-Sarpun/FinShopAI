@@ -102,15 +102,17 @@ async def update_profile(
     user_id = current_user["sub"]
     try:
         db = SupabaseService()
-        update_data: dict = {"id": user_id}
+        update_data: dict = {}
         if body.full_name is not None:
             update_data["full_name"] = body.full_name.strip()
         if body.occupation is not None:
             update_data["occupation"] = body.occupation.strip()
         if body.extra_info is not None:
             update_data["extra_info"] = body.extra_info.strip()
-        await db.upsert_profile(update_data)
-        return {"success": True, **{k: v for k, v in update_data.items() if k != "id"}}
+        if not update_data:
+            return {"success": True}
+        await db.update_profile(user_id, update_data)
+        return {"success": True, **update_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

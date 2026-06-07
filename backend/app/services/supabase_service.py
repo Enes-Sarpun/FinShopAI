@@ -27,6 +27,17 @@ class SupabaseService:
         result = self.client.table("profiles").upsert(data).execute()
         return result.data[0]
 
+    async def update_profile(self, user_id: str, data: dict) -> dict:
+        result = (
+            self.client.table("profiles")
+            .update(data)
+            .eq("id", user_id)
+            .execute()
+        )
+        if not result.data:
+            raise Exception(f"Profile not found or update failed for user_id={user_id}")
+        return result.data[0]
+
     async def get_personality(self, user_id: str) -> dict | None:
         result = (
             self.client.table("personality_profiles")
