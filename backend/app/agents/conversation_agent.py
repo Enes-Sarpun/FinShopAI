@@ -48,11 +48,19 @@ BUDGET_KEYWORDS = [
 ]
 
 PRODUCT_KEYWORDS = [
-    "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
-    "ucuz", "fiyat", "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
-    "tablet", "saat", "ayakkabı", "tv", "televizyon", "parfüm",
-    "iphone", "samsung", "xiaomi", "apple", "nasıl olur", "ne olur",
-    "peki", "ya", "başka", "farklı", "alternatif",
+    # Ürün arama fiilleri — "istiyorum" gibi genel fiiller kasıtlı olarak dışarıda
+    "öner", "arıyorum", "satın", "hediye",
+    "almak istiyorum", "almak lazım", "almayı düşünüyorum",
+    # Fiyat / kalite
+    "ucuz", "uygun fiyat", "fiyat", "indirim",
+    # Ürün kategorileri
+    "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
+    "tablet", "akıllı saat", "ayakkabı", "tv", "televizyon", "parfüm",
+    "kamera", "klavye", "mouse", "monitör", "şarj",
+    # Markalar
+    "iphone", "samsung", "xiaomi", "apple", "huawei", "sony", "lg",
+    # Karşılaştırma / alternatif — sadece ürün bağlamında
+    "alternatif", "karşılaştır",
 ]
 
 def _coerce_metadata(meta) -> dict:
@@ -265,23 +273,35 @@ class ConversationAgent(BaseAgent):
                 "Bütçe Ayarları sayfasından gelir ve giderlerini girersen sana detaylı analiz yapabilirim."
             )
 
+        b = budget_info if isinstance(budget_info, dict) else {}
+        budget_summary = (
+            f"Aylık gelir: {b.get('total_income', '?')} TL\n"
+            f"Sabit giderler: {b.get('fixed_expenses', '?')} TL\n"
+            f"Tasarruf hedefi: {b.get('savings_goal', 0)} TL\n"
+            f"Harcanabilir (tasarruf sonrası): {b.get('spendable_after_savings', '?')} TL\n"
+            f"Bu ay harcanan: {b.get('current_month_spending', 0)} TL\n"
+            f"Kalan harcanabilir: {b.get('remaining_spendable', '?')} TL"
+        )
         try:
-            b = budget_info if isinstance(budget_info, dict) else {}
-            budget_summary = (
-                f"Aylık gelir: {b.get('total_income', '?')} TL\n"
-                f"Sabit giderler: {b.get('fixed_expenses', '?')} TL\n"
-                f"Tasarruf hedefi: {b.get('savings_goal', 0)} TL\n"
-                f"Harcanabilir (tasarruf sonrası): {b.get('spendable_after_savings', '?')} TL\n"
-                f"Bu ay harcanan: {b.get('current_month_spending', 0)} TL\n"
-                f"Kalan harcanabilir: {b.get('remaining_spendable', '?')} TL"
-            )
             prompt = BUDGET_QUERY_PROMPT.format(
                 budget_info=budget_summary,
                 message=message,
             )
             return await self.call_llm(prompt, system=self._build_system_prompt(None))
-        except Exception:
-            return "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
+        except Exception as e:
+            # LLM quota/hata durumunda ham veriyi doğal dilde göster
+            self.logger.warning(f"[conv] budget LLM fallback: {e}")
+            remaining = b.get('remaining_spendable')
+            income = b.get('total_income')
+            if remaining is not None and income is not None:
+                return (
+                    f"Bütçene baktım! 💰 Bu ay harcanabilir alanın yaklaşık "
+                    f"{int(remaining):,} TL. Aylık gelirinle kıyasladığında "
+                    f"{'iyi durumdasın 👍' if remaining > 0 else 'bütçeni aştın ⚠️'}"
+                )
+            return (
+                f"İşte bütçe özetin:\n{budget_summary.replace(chr(10), ' | ')}"
+            )
 
     def _get_product_context(self, history: list) -> dict | None:
         if not history:
