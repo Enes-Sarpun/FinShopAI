@@ -24,24 +24,43 @@ HOWRU_REPLIES = [
 ]
 
 BUDGET_KEYWORDS = [
+    # Bütçe - doğrudan
     "bütçem", "bütçemi", "bütçemde", "bütçeme", "bütçemle",
     "bütçem ne", "bütçem var", "bütçem kaç", "bütçem nedir",
     "ne kadar bütçe", "bütçem ne kadar", "bütçe durumum", "bütçe bilgi",
     "bütçeye bak", "bütçeyi göster", "bütçeyi görebilir",
+    # Para / harcama
     "param var mı", "param yeter mi", "param ne kadar", "ne kadar param",
     "param kaç", "param nedir", "paramı göster", "param kaldı mı",
-    "harcayabilir miyim", "ne kadar harcadım", "bu ay ne harcadım",
-    "harcama durumum", "mali durum", "finansal durum",
-    "gelir", "maaşım", "aylık gelir",
+    "ne kadar harcadım", "bu ay ne harcadım", "harcama durumum",
     "ne kadar kaldı", "kalan param", "kalan bütçe",
+    # Doğal dil — "harcayabilir miyim / harcayabilirim / harcayabilir miyiz"
+    "harcayabil", "ödeyebilir", "alabilir miyim", "alabilir miyiz",
+    "yetecek mi", "yeter mi bütçe", "yetecek mi bütçem",
+    # Finansal durum
+    "mali durum", "finansal durum", "maaşım", "aylık gelir",
+    # Serbest harcama soruları
+    "ne kadar harcayabilirim", "ne kadar harcayabilir",
+    "bu ay ne kadar", "aylık ne kadar",
+    "ne kadar param var", "ne kadar param kaldı",
+    "bu alışverişi yapabilir miyim", "buna bütçem yeter",
+    "bunu alabilir miyim", "bu ürünü alabilir miyim",
 ]
 
 PRODUCT_KEYWORDS = [
-    "öner", "arıyorum", "bul", "istiyorum", "almak", "satın", "hediye",
-    "ucuz", "fiyat", "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
-    "tablet", "saat", "ayakkabı", "tv", "televizyon", "parfüm",
-    "iphone", "samsung", "xiaomi", "apple", "nasıl olur", "ne olur",
-    "peki", "ya", "başka", "farklı", "alternatif",
+    # Ürün arama fiilleri — "istiyorum" gibi genel fiiller kasıtlı olarak dışarıda
+    "öner", "arıyorum", "satın", "hediye",
+    "almak istiyorum", "almak lazım", "almayı düşünüyorum",
+    # Fiyat / kalite
+    "ucuz", "uygun fiyat", "fiyat", "indirim",
+    # Ürün kategorileri
+    "ürün", "laptop", "telefon", "bilgisayar", "kulaklık",
+    "tablet", "akıllı saat", "ayakkabı", "tv", "televizyon", "parfüm",
+    "kamera", "klavye", "mouse", "monitör", "şarj",
+    # Markalar
+    "iphone", "samsung", "xiaomi", "apple", "huawei", "sony", "lg",
+    # Karşılaştırma / alternatif — sadece ürün bağlamında
+    "alternatif", "karşılaştır",
 ]
 
 def _coerce_metadata(meta) -> dict:
@@ -98,6 +117,24 @@ class ConversationAgent(BaseAgent):
     def __init__(self, llm, db):
         super().__init__("conversation_agent", llm, db)
 
+    def _build_system_prompt(self, user_profile: dict | None) -> str:
+        if not user_profile:
+            return CONVERSATION_SYSTEM_PROMPT
+        parts = []
+        name = (user_profile.get("full_name") or "").strip()
+        occupation = (user_profile.get("occupation") or "").strip()
+        extra_info = (user_profile.get("extra_info") or "").strip()
+        if name:
+            parts.append(f"- Kullanıcının adı: {name} (hitap ederken adını kullanabilirsin)")
+        if occupation:
+            parts.append(f"- Mesleği: {occupation}")
+        if extra_info:
+            parts.append(f"- Hakkında ek bilgi: {extra_info}")
+        if not parts:
+            return CONVERSATION_SYSTEM_PROMPT
+        user_ctx = "\n".join(parts)
+        return CONVERSATION_SYSTEM_PROMPT + f"\n\nKULLANICI PROFİLİ:\n{user_ctx}"
+
     async def execute(self, input_data: dict) -> dict:
         t0 = time.monotonic()
         message = input_data.get("message", "").strip()
@@ -105,6 +142,7 @@ class ConversationAgent(BaseAgent):
         budget_info = input_data.get("budget_info")
         user_id = input_data.get("user_id")
         personality = input_data.get("personality")
+        user_profile = input_data.get("user_profile")
 
         if not message:
             return self._build_result("CHITCHAT", 1.0, "Ne sormak isterdiniz? 😊")
@@ -116,6 +154,12 @@ class ConversationAgent(BaseAgent):
 
         # Bütçe sorgularını hızlı yönlendir
         if any(kw in lower_clean for kw in BUDGET_KEYWORDS):
+        has_budget_kw = any(kw in lower_clean for kw in BUDGET_KEYWORDS)
+        has_product_kw = any(kw in lower_clean for kw in PRODUCT_KEYWORDS)
+        # Sadece bütçe sorusu ise hızlı yanıt ver.
+        # Ama mesajda aynı zamanda ürün araması da varsa (örn. "bütçemi aşıyor, X önerir misin")
+        # LLM'e bırak — hem bütçe hem ürün niyeti olabilir.
+        if has_budget_kw and not has_product_kw:
             self.logger.info("[conv] quick=BUDGET_QUERY")
             reply = await self._handle_budget_query(message, budget_info, user_id)
             elapsed = (time.monotonic() - t0) * 1000
@@ -168,6 +212,8 @@ class ConversationAgent(BaseAgent):
 
             system_prompt = f"{CONVERSATION_SYSTEM_PROMPT}\n\n{INTENT_SYSTEM}"
             result = await self.call_llm_json(prompt, system=system_prompt)
+            system_prompt = self._build_system_prompt(user_profile)
+            result = await self.call_llm_json(prompt, system=system_prompt or INTENT_SYSTEM)
 
             intent = result.get("intent", "CHITCHAT").upper()
             confidence = float(result.get("confidence", 0.5))
@@ -220,14 +266,16 @@ class ConversationAgent(BaseAgent):
                 extracted_query = None
             comparison_products = []
 
-        if intent == "BUDGET_QUERY" and not reply:
+        if intent == "BUDGET_QUERY":
+            # LLM'den gelen reply bütçe verisi olmadan üretilmiş olabilir; her durumda
+            # BudgetAgent üzerinden gerçek veriyle yanıt oluştur.
             reply = await self._handle_budget_query(message, budget_info, user_id)
 
         if intent == "COMPLAINT":
             if not reply:
                 try:
                     complaint_prompt = COMPLAINT_REPLY_PROMPT.format(message=message)
-                    reply = await self.call_llm(complaint_prompt, system=CONVERSATION_SYSTEM_PROMPT)
+                    reply = await self.call_llm(complaint_prompt, system=self._build_system_prompt(user_profile))
                 except Exception:
                     reply = "Üzgünüm, yaşadığın sorun için özür dilerim 🙏 Farklı bir arama deneyelim mi?"
 
@@ -260,23 +308,35 @@ class ConversationAgent(BaseAgent):
                 "Bütçe Ayarları sayfasından gelir ve giderlerini girersen sana detaylı analiz yapabilirim."
             )
 
+        b = budget_info if isinstance(budget_info, dict) else {}
+        budget_summary = (
+            f"Aylık gelir: {b.get('total_income', '?')} TL\n"
+            f"Sabit giderler: {b.get('fixed_expenses', '?')} TL\n"
+            f"Tasarruf hedefi: {b.get('savings_goal', 0)} TL\n"
+            f"Harcanabilir (tasarruf sonrası): {b.get('spendable_after_savings', '?')} TL\n"
+            f"Bu ay harcanan: {b.get('current_month_spending', 0)} TL\n"
+            f"Kalan harcanabilir: {b.get('remaining_spendable', '?')} TL"
+        )
         try:
-            b = budget_info if isinstance(budget_info, dict) else {}
-            budget_summary = (
-                f"Aylık gelir: {b.get('total_income', '?')} TL\n"
-                f"Sabit giderler: {b.get('fixed_expenses', '?')} TL\n"
-                f"Tasarruf hedefi: {b.get('savings_goal', 0)} TL\n"
-                f"Harcanabilir (tasarruf sonrası): {b.get('spendable_after_savings', '?')} TL\n"
-                f"Bu ay harcanan: {b.get('current_month_spending', 0)} TL\n"
-                f"Kalan harcanabilir: {b.get('remaining_spendable', '?')} TL"
-            )
             prompt = BUDGET_QUERY_PROMPT.format(
                 budget_info=budget_summary,
                 message=message,
             )
-            return await self.call_llm(prompt, system=CONVERSATION_SYSTEM_PROMPT)
-        except Exception:
-            return "Bütçe bilgilerine şu an ulaşamıyorum, birazdan tekrar dener misin?"
+            return await self.call_llm(prompt, system=self._build_system_prompt(None))
+        except Exception as e:
+            # LLM quota/hata durumunda ham veriyi doğal dilde göster
+            self.logger.warning(f"[conv] budget LLM fallback: {e}")
+            remaining = b.get('remaining_spendable')
+            income = b.get('total_income')
+            if remaining is not None and income is not None:
+                return (
+                    f"Bütçene baktım! 💰 Bu ay harcanabilir alanın yaklaşık "
+                    f"{int(remaining):,} TL. Aylık gelirinle kıyasladığında "
+                    f"{'iyi durumdasın 👍' if remaining > 0 else 'bütçeni aştın ⚠️'}"
+                )
+            return (
+                f"İşte bütçe özetin:\n{budget_summary.replace(chr(10), ' | ')}"
+            )
 
     def _get_product_context(self, history: list) -> dict | None:
         if not history:

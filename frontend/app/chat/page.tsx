@@ -6,7 +6,7 @@ import { chatApi, authApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { formatPrice } from "@/lib/utils";
 import type { ChatResponse, Product } from "@/types";
-import { Send, Sparkles, ShoppingBag, Trash2, Star } from "lucide-react";
+import { Send, Sparkles, ShoppingBag, Trash2, Star, Zap, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Image from "next/image";
 import toast from "react-hot-toast";
@@ -46,6 +46,7 @@ function saveToStorage(key: string, msgs: Msg[]) {
 
 interface UserInfo { full_name?: string; email?: string; }
 
+
 function ChatPageInner() {
   const { t } = useTranslation();
   const { loading } = useAuth();
@@ -57,14 +58,26 @@ function ChatPageInner() {
   const [hydrated, setHydrated] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const activeThreadId = useRef<string | null>(null);
   const paramHandled = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     authApi.me().then((d) => setUser(d as UserInfo)).catch(() => { });
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   const loadId = searchParams.get("load");
@@ -137,7 +150,6 @@ function ChatPageInner() {
 
     activeThreadId.current = null;
     if (!q) {
-      // Yeni sohbet — önceki session verisini temizle ve boş başla
       try { sessionStorage.removeItem(storageKey(null)); } catch { }
       setMessages([]);
     }
@@ -238,13 +250,6 @@ function ChatPageInner() {
     }
   }
 
-  function clearChat() {
-    sessionStorage.removeItem(storageKey(activeThreadId.current));
-    activeThreadId.current = null;
-    setMessages(WELCOME);
-    router.replace("/chat", { scroll: false });
-  }
-
   async function deleteHistory() {
     if (!confirm("Tüm geçmiş silinecek. Emin misin?")) return;
     try {
@@ -259,6 +264,8 @@ function ChatPageInner() {
     }
   }
 
+  const isEmpty = messages.length === 0 && !sending && !loadingThread;
+
   if (loading) return (
     <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg-mesh)" }}>
       <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -271,57 +278,99 @@ function ChatPageInner() {
 
       <div className="flex flex-col flex-1 min-w-0">
 
-        <header className="flex items-center justify-between px-6 py-3 border-b border-white/60 dark:border-gray-700/60 flex-shrink-0 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t("chat.assistantName")}</p>
-              <p className="text-xs text-emerald-500 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
-                {t("chat.online")}
-              </p>
-            </div>
+        {/* ── Top Bar ── */}
+        <header className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200/60 dark:border-gray-700/60 flex-shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
+          {/* Sol: Model selector */}
+          <div className="relative" ref={modelMenuRef}>
+            <button
+              onClick={() => setModelMenuOpen((p) => !p)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+            >
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">FinShop AI</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">1.0</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${modelMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            <AnimatePresence>
+              {modelMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full left-0 mt-1.5 w-56 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden z-50"
+                >
+                  <div className="p-2 space-y-0.5">
+                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/30">
+                      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">FinShop AI 1.0</p>
+                        <p className="text-[10px] text-blue-600 dark:text-blue-400">Aktif model</p>
+                      </div>
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0" />
+                    </div>
+                    <div className="px-3 py-2 opacity-40 pointer-events-none">
+                      <p className="text-xs font-medium text-gray-600 dark:text-gray-400">FinShop AI 2.0</p>
+                      <p className="text-[10px] text-gray-400">Yakında</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-2.5">
+                    <p className="text-[10px] text-gray-400 leading-relaxed">Manus + Gemini altyapısı üzerinde çalışır. Ürün araştırması ve finansal öneriler için optimize edilmiştir.</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
+
+          {/* Sağ: Kredi + Geçmişi Sil */}
           <div className="flex items-center gap-2">
-            <button onClick={deleteHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors border border-red-100 dark:border-red-900/40">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <Zap className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-xs font-medium text-gray-400 dark:text-gray-500">Kredi — Yakında</span>
+            </div>
+            <button
+              onClick={deleteHistory}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors border border-red-100 dark:border-red-900/40"
+            >
               <Trash2 className="w-3.5 h-3.5" />
               {t("chat.deleteHistory")}
             </button>
           </div>
         </header>
 
+        {/* ── Mesajlar ── */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
 
+            {/* Welcome hero */}
             <AnimatePresence>
-              {messages.length === 0 && !sending && !loadingThread && (
+              {isEmpty && (
                 <motion.div
                   key="welcome-hero"
-                  className="flex flex-col items-center justify-center py-12 gap-5"
+                  className="flex flex-col items-center justify-center pt-20 pb-8 gap-6"
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -12, scale: 0.97 }}
                   transition={{ duration: 0.4 }}
                 >
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <Sparkles className="w-8 h-8 text-white" />
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-lg">
+                    <Sparkles className="w-10 h-10 text-white" />
                   </div>
-                  <div className="text-center space-y-1">
-                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t("chat.assistantName")}</h2>
+                  <div className="text-center space-y-2">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t("chat.heroQuestion")}</h2>
                     <p className="text-sm text-gray-400 dark:text-gray-500">{t("chat.heroSubtitle")}</p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 justify-center max-w-sm">
-                    {(t("chat.suggestions", { returnObjects: true }) as string[]).map((q) => (
+                  <div className="flex flex-wrap gap-2 justify-center max-w-md mt-2">
+                    {(t("chat.suggestions", { returnObjects: true }) as string[]).map((s) => (
                       <button
-                        key={q}
-                        onClick={() => send(q)}
-                        className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50 rounded-full hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors"
+                        key={s}
+                        onClick={() => send(s)}
+                        className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all shadow-sm"
                       >
-                        {q}
+                        {s}
                       </button>
                     ))}
                   </div>
@@ -341,17 +390,19 @@ function ChatPageInner() {
             </AnimatePresence>
 
             {sending && <TypingIndicator />}
+            {loadingThread && <ThreadSkeleton />}
             <div ref={bottomRef} />
           </div>
         </div>
 
-        <div className="border-t border-white/40 dark:border-gray-700/40 px-4 py-5 flex-shrink-0" style={{ background: "var(--bg-mesh)" }}>
+        {/* ── Input alanı ── */}
+        <div className="px-4 pb-5 pt-3 flex-shrink-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-t border-gray-200/40 dark:border-gray-700/40">
           <div className="max-w-2xl mx-auto">
-            <div className="flex items-center gap-3 border border-white/60 dark:border-gray-600/60 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-400/60 focus-within:border-blue-400/60 transition-all shadow-sm" style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
+            <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm focus-within:border-blue-400 dark:focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-400/20 transition-all">
               <textarea
                 ref={inputRef}
                 rows={1}
-                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400/80 resize-none outline-none leading-normal"
+                className="w-full bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 resize-none outline-none leading-normal px-4 pt-3.5 pb-12"
                 placeholder={t("chat.placeholder")}
                 value={input}
                 onChange={handleInputChange}
@@ -359,10 +410,15 @@ function ChatPageInner() {
                 disabled={sending}
                 style={{ height: "auto", minHeight: "22px" }}
               />
-              <button onClick={() => send(input)} disabled={!input.trim() || sending}
-                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all flex-shrink-0 shadow-sm active:scale-95">
-                <Send className="w-3.5 h-3.5 text-white" />
-              </button>
+              <div className="absolute bottom-3 right-3">
+                <button
+                  onClick={() => send(input)}
+                  disabled={!input.trim() || sending}
+                  className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg flex items-center justify-center transition-all active:scale-95 shadow-sm"
+                >
+                  <Send className="w-3.5 h-3.5 text-white" />
+                </button>
+              </div>
             </div>
             <p className="text-center text-xs text-gray-400/60 mt-2">
               {t("chat.disclaimer")}
@@ -422,8 +478,7 @@ function BotBubble({ text, budgetStatus }: { text: string; budgetStatus?: string
       <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
         <Sparkles className="w-3.5 h-3.5 text-white" />
       </div>
-      <div className={`max-w-[75%] rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed shadow-sm ${accent || "bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 text-gray-800 dark:text-gray-100"}`}
-        style={!accent ? { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" } : {}}>
+      <div className={`max-w-[75%] rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed shadow-sm ${accent || "bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"}`}>
         {text}
       </div>
     </motion.div>
@@ -442,76 +497,52 @@ function TypingIndicator() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev >= steps.length - 1) {
-          return prev;
-        }
-        return prev + 1;
-      });
+      setCurrentStep((prev) => prev >= steps.length - 1 ? prev : prev + 1);
     }, 3000);
-
     return () => clearInterval(interval);
   }, []);
 
   return (
     <motion.div
-      className="flex justify-center w-full"
+      className="flex justify-start gap-3"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <div className="w-full max-w-3xl px-4 py-6 space-y-2">
+      <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm space-y-1.5">
         {steps.map((step, index) => (
           <motion.div
             key={index}
-            className="flex items-center gap-3"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{
-              opacity: index <= currentStep ? 1 : 0.3,
-              x: 0
-            }}
+            className="flex items-center gap-2.5"
+            animate={{ opacity: index <= currentStep ? 1 : 0.25 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center">
+            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
               {index < currentStep && (
-                <motion.div
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                >
-                  <span className="text-emerald-500 font-bold text-lg">✓</span>
-                </motion.div>
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="text-emerald-500 font-bold text-sm"
+                >✓</motion.span>
               )}
               {index === currentStep && (
                 <motion.div
                   animate={{
-                    scale: [1, 1.10, 1],
+                    scale: [1, 1.1, 1],
                     opacity: [0.8, 1, 0.8],
-                    filter: [
-                      "drop-shadow(0 0 0px #3b82f6)",
-                      "drop-shadow(0 0 6px #3b82f6) drop-shadow(0 0 10px #818cf8)",
-                      "drop-shadow(0 0 0px #3b82f6)",
-                    ],
                   }}
-                  transition={{
-                    duration: 2.8,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    times: [0, 0.5, 1],
-                  }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <Sparkles className="w-5 h-5 text-blue-500" />
+                  <Sparkles className="w-4 h-4 text-blue-500" />
                 </motion.div>
               )}
               {index > currentStep && (
-                <motion.div>
-                  <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full inline-block" />
-                </motion.div>
+                <span className="w-1.5 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full inline-block" />
               )}
             </div>
-
-            <span className={`text-sm ${index <= currentStep
-              ? "text-gray-700 dark:text-gray-300 font-medium"
-              : "text-gray-400 dark:text-gray-500"
-              }`}>
+            <span className={`text-xs ${index <= currentStep ? "text-gray-700 dark:text-gray-300 font-medium" : "text-gray-400 dark:text-gray-600"}`}>
               {step}
             </span>
           </motion.div>
@@ -543,8 +574,7 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
       </div>
       <div className="flex-1 max-w-[85%] space-y-3">
         {advice && (
-          <div className="bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium shadow-sm"
-            style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium shadow-sm">
             {advice}
           </div>
         )}
@@ -568,11 +598,9 @@ function ProductsMessage({ products, overBudgetProducts, topPick, advice }: {
 
         {hasOverBudget && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
-                {t("chat.overBudget", { count: overBudgetProducts!.length })}
-              </span>
-            </div>
+            <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold px-1">
+              {t("chat.overBudget", { count: overBudgetProducts!.length })}
+            </p>
             {overBudgetProducts!.map((product, i) => (
               <ProductCard key={`ob-${i}`} product={product} overBudget />
             ))}
@@ -640,11 +668,10 @@ function ProductCard({ product, overBudget }: { product: Product; overBudget?: b
         href={product.url}
         target="_blank"
         rel="noopener noreferrer"
-        className={`flex gap-3 rounded-2xl p-3 transition-all group ${overBudget
-          ? "bg-amber-50/85 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40 hover:border-amber-300/60"
-          : "bg-white/85 dark:bg-gray-800/85 border border-white/80 dark:border-gray-700/60 hover:shadow-glass-hover hover:border-blue-200/60 dark:hover:border-blue-700/40"
+        className={`flex gap-3 rounded-2xl p-3 transition-all group border ${overBudget
+          ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200/60 dark:border-amber-700/40 hover:border-amber-300"
+          : "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700 hover:shadow-md"
           }`}
-        style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
         whileHover={{ y: -2 }}
         transition={{ duration: 0.15 }}
       >
@@ -673,16 +700,14 @@ function ProductCard({ product, overBudget }: { product: Product; overBudget?: b
       <button
         onClick={handleStar}
         disabled={loading}
-        className="absolute top-2.5 right-2.5 z-10 p-1.5 rounded-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-all shadow-sm"
+        className="absolute top-2.5 right-2.5 z-10 p-1.5 rounded-full bg-white dark:bg-gray-900 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-all shadow-sm border border-gray-100 dark:border-gray-700"
         title={starred ? "Takipten çıkar" : "Fiyat takibine al"}
       >
         <Star
           className={[
             "w-4 h-4 transition-all duration-200",
             popping ? "animate-star-pop" : "",
-            starred
-              ? "fill-yellow-400 text-yellow-400 drop-shadow-star"
-              : "text-gray-400 hover:text-yellow-400",
+            starred ? "fill-yellow-400 text-yellow-400 drop-shadow-star" : "text-gray-400 hover:text-yellow-400",
           ].join(" ")}
         />
       </button>

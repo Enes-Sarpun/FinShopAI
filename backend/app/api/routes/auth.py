@@ -18,6 +18,12 @@ class AvatarUpdateRequest(BaseModel):
     avatar_url: str | None = Field(default=None)
 
 
+class ProfileUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, max_length=100)
+    occupation: str | None = Field(default=None, max_length=100)
+    extra_info: str | None = Field(default=None, max_length=500)
+
+
 @router.post("/register")
 async def register(body: RegisterRequest):
     client = SupabaseService().client
@@ -86,6 +92,29 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil bulunamadı")
     return profile
+
+
+@router.patch("/me/profile")
+async def update_profile(
+    body: ProfileUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["sub"]
+    try:
+        db = SupabaseService()
+        update_data: dict = {}
+        if body.full_name is not None:
+            update_data["full_name"] = body.full_name.strip()
+        if body.occupation is not None:
+            update_data["occupation"] = body.occupation.strip()
+        if body.extra_info is not None:
+            update_data["extra_info"] = body.extra_info.strip()
+        if not update_data:
+            return {"success": True}
+        await db.update_profile(user_id, update_data)
+        return {"success": True, **update_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch("/me/avatar")

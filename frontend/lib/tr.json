@@ -27,7 +27,8 @@
     "settings": "Ayarlar",
     "myAccount": "Hesabım",
     "openMenu": "Menüyü aç",
-    "user": "Kullanıcı"
+    "user": "Kullanıcı",
+    "help": "Yardım"
   },
   "dashboard": {
     "welcomeBase": "Hoş geldin",
@@ -71,6 +72,11 @@
     "avatarSaveFailed": "Fotoğraf kaydedilemedi.",
     "avatarReadFailed": "Görsel okunamadı.",
     "useInitials": "Baş Harflerle Devam Et",
+    "personalization": "Kişiselleştirme",
+    "personalizationDesc": "Bu bilgiler asistanın sana daha iyi hitap etmesini ve önerileri kişiselleştirmesini sağlar.",
+    "occupation": "Meslek",
+    "extraInfo": "Ekstra Bilgiler",
+    "extraInfoPlaceholder": "Alışveriş tercihlerin, ilgi alanların veya asistana bildirmek istediğin herhangi bir şey...",
     "editBanner": "Düzenle",
     "chooseBannerStyle": "Banner Rengi",
     "selectBannerStyle": "Bir banner stili seçin"
@@ -81,6 +87,7 @@
       "account": "Hesap",
       "financialProfile": "Finansal Profil",
       "app": "Uygulama",
+      "help": "Yardım",
       "session": "Oturum"
     },
     "items": {
@@ -91,15 +98,115 @@
       "personalityTest": "Kişilik Testi",
       "personalityTestDesc": "Harcama profilini yenile",
       "notifications": "Bildirimler",
+      "notificationsDesc": "Tarayıcı ve e-posta bildirimlerini yönet",
       "privacy": "Gizlilik",
+      "privacyDesc": "Veri kullanımı ve kullanıcı hakları",
+      "feedback": "Geri Bildirim Gönder",
+      "feedbackDesc": "Hata, öneri veya sorunuzu iletin",
       "logout": "Çıkış Yap",
       "logoutDesc": "Oturumu sonlandır"
-    }
+    },
+    "myAccount": "Hesabım",
+    "system": "Sistem",
+    "systemLight": "Açık",
+    "systemDark": "Koyu",
+    "systemNext": "Açık moda geç",
+    "systemNextDark": "Koyu moda geç"
+  },
+  "notifications": {
+    "title": "Bildirimler",
+    "subtitle": "Hangi kanallardan bildirim almak istediğini seç.",
+    "backToSettings": "Ayarlara Dön",
+    "infoBanner": "Bildirim özellikleri yakında aktifleştirilecek. Şu an bu ayarlar önizleme modundadır.",
+    "preferencesTitle": "İletişim Tercihleri",
+    "preferencesSubtitle": "Bildirim kanallarını yönet",
+    "browser": "Tarayıcı Bildirimleri",
+    "browserDesc": "Yeni bir ilerleme olduğunda veya bir görev tamamlandığında tarayıcınızda bildirim alın.",
+    "email": "E-posta Bildirimleri",
+    "emailDesc": "Önemli güncellemeler ve fırsat bildirimleri e-posta adresinize gönderilsin.",
+    "comingSoonTitle": "Yakında Gelecek",
+    "comingSoonSubtitle": "Planlanan bildirim özellikleri",
+    "comingSoonItems": [
+      "Fiyat düşüşü bildirimleri (İzleme listesi)",
+      "Bütçe aşımı uyarıları",
+      "Haftalık harcama özeti",
+      "Kişiselleştirilmiş fırsat bildirimleri"
+    ],
+    "emailSendTo": "Bildirimler şu adrese gönderilecek"
+  },
+  "privacy": {
+    "title": "Gizlilik",
+    "subtitle": "Verilerinin nasıl saklandığını ve haklarını öğren.",
+    "backToSettings": "Ayarlara Dön",
+    "safeBanner": "Verilerini güvende tutmak en önceliğimizdir. Hiçbir kişisel veriniz üçüncü taraflarla paylaşılmaz.",
+    "dataStored": "Hangi Veriler Saklanıyor?",
+    "dataStoredIntro": "FinShop AI, sana kişiselleştirilmiş bir deneyim sunmak için aşağıdaki verileri saklar:",
+    "dataStoredItems": [
+      "Hesap bilgileri: ad, e-posta adresi",
+      "Bütçe bilgileri: gelir, gider ve tasarruf hedefleri",
+      "Kişilik testi sonuçları: harcama profili",
+      "Sohbet geçmişi: asistanla yaptığın konuşmalar",
+      "İzleme listesi: takip ettiğin ürünler ve fiyat geçmişi",
+      "Harcama kayıtları: eklediğin manuel harcamalar"
+    ],
+    "dataProtected": "Verilerim Nasıl Korunuyor?",
+    "dataProtectedItems": [
+      "Tüm veriler Supabase altyapısında şifreli olarak saklanır.",
+      "Her kullanıcı yalnızca kendi verilerine erişebilir (Row Level Security).",
+      "Şifreler asla düz metin olarak saklanmaz; güçlü hash algoritmaları kullanılır.",
+      "Sunucu ile tarayıcı arasındaki tüm iletişim HTTPS ile şifrelenir.",
+      "Oturum token'ları sınırlı geçerlilik süresine sahiptir."
+    ],
+    "dataPurpose": "Verilerim Ne Amaçla Kullanılıyor?",
+    "dataPurposeIntro": "Verilerini yalnızca sana daha iyi hizmet vermek için kullanıyoruz:",
+    "dataPurposeItems": [
+      "Bütçene uygun ürün önerileri sunmak",
+      "Kişilik profiline göre tasarruf tavsiyeleri oluşturmak",
+      "İzleme listenizdeki ürünlerin fiyat değişikliklerini takip etmek",
+      "Sohbet geçmişini bağlamsal yanıtlar için kullanmak"
+    ],
+    "dataPurposeNote": "Verileriniz hiçbir koşulda reklam amaçlı kullanılmaz veya üçüncü taraflarla paylaşılmaz.",
+    "userRights": "Kullanıcı Hakların",
+    "userRightsIntro": "KVKK ve GDPR kapsamında aşağıdaki haklara sahipsin:",
+    "userRightsItems": [
+      "Erişim hakkı: Saklanan tüm verilerini görüntüleyebilirsin.",
+      "Düzeltme hakkı: Hatalı verilerin düzeltilmesini talep edebilirsin.",
+      "Silme hakkı: Hesabını ve tüm verilerini kalıcı olarak silebilirsin.",
+      "Taşıma hakkı: Verilerinin dışa aktarılmasını talep edebilirsin.",
+      "İtiraz hakkı: Belirli veri işleme faaliyetlerine itiraz edebilirsin."
+    ],
+    "dataOps": "Veri İşlemleri",
+    "dataOpsSubtitle": "Yakında aktifleştirilecek",
+    "download": "Verilerimi İndir",
+    "downloadDesc": "Tüm verilerini JSON formatında dışa aktar",
+    "deleteAccount": "Hesabımı ve Verilerimi Sil",
+    "deleteAccountDesc": "Bu işlem geri alınamaz",
+    "contactBanner": "Gizlilik haklarınla ilgili talepler için Ayarlar → Yardım bölümünden bize ulaşabilirsin."
+  },
+  "feedback": {
+    "categoryLabel": "Kategori",
+    "priorityLabel": "Öncelik",
+    "titleLabel": "Başlık",
+    "titlePlaceholder": "Kısaca anlat...",
+    "descLabel": "Açıklama",
+    "descPlaceholder": "Detaylı anlat...",
+    "submit": "Gönder",
+    "submitting": "Gönderiliyor...",
+    "successTitle": "Mesajın Ulaştı!",
+    "successDesc": "En kısa sürede dönüş yapacağız.",
+    "newMessage": "Yeni Mesaj Gönder",
+    "catBug": "Hata Bildirimi",
+    "catSuggestion": "Öneri / Fikir",
+    "catQuestion": "Soru",
+    "prioLow": "Düşük",
+    "prioMedium": "Orta",
+    "prioHigh": "Yüksek"
   },
   "chat": {
     "assistantName": "FinShop Asistanı",
     "online": "Çevrimiçi",
     "deleteHistory": "Geçmişi Sil",
+    "heroQuestion": "Sizin için ne yapabilirim?",
     "heroSubtitle": "Bütçene uygun en iyi ürünleri birlikte bulalım.",
     "welcome": "Merhaba! Bütçene uygun ürünler bulmana yardım edebilirim 🛍️",
     "placeholder": "Bugün ne arıyoruz? Ürün, bütçe, hediye... 🛍️",

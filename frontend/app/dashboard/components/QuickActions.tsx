@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { MessageCircle, Clock, Wallet, Brain, Settings, LifeBuoy } from "lucide-react";
+import { MessageCircle, Clock, Wallet, Brain, Settings } from "lucide-react";
 
 const container = {
   hidden: {},
@@ -35,7 +35,7 @@ export default function QuickActions() {
       desc: t("quickActions.pastSearchesDesc"),
     },
     {
-      href: "/onboarding/budget",
+      href: "/settings",
       label: t("quickActions.updateBudget"),
       icon: Wallet,
       bg: "bg-emerald-50 dark:bg-emerald-900/20",
@@ -43,7 +43,7 @@ export default function QuickActions() {
       desc: t("quickActions.updateBudgetDesc"),
     },
     {
-      href: "/onboarding/personality",
+      href: "/settings",
       label: t("quickActions.personalityTest"),
       icon: Brain,
       bg: "bg-orange-50 dark:bg-orange-900/20",
@@ -57,14 +57,6 @@ export default function QuickActions() {
       bg: "bg-gray-50 dark:bg-gray-700/30",
       iconColor: "text-gray-600 dark:text-gray-400",
       desc: t("quickActions.accountSettingsDesc"),
-    },
-    {
-      href: "/support",
-      label: t("quickActions.support"),
-      icon: LifeBuoy,
-      bg: "bg-rose-50 dark:bg-rose-900/20",
-      iconColor: "text-rose-600 dark:text-rose-400",
-      desc: t("quickActions.supportDesc"),
     },
   ];
 

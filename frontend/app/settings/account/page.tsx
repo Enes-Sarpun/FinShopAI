@@ -8,7 +8,7 @@ import { useLang } from "@/lib/LangContext";
 import Sidebar from "@/app/dashboard/components/Sidebar";
 import {
   User, Mail, ArrowLeft, Pencil, Check, X,
-  ShoppingBag, Brain, Wallet, Bell, Globe,
+  ShoppingBag, Brain, Wallet, Globe,
   Shield, LogOut, Sun, Moon, Monitor, ChevronDown,
   Camera, Upload, Trash2,
 } from "lucide-react";
@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 
-interface UserInfo { full_name?: string; email?: string; avatar_url?: string | null; }
+interface UserInfo { full_name?: string; email?: string; avatar_url?: string | null; occupation?: string; extra_info?: string; }
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
@@ -87,6 +87,59 @@ function EditField({ label, value, onSave }: { label: string; value: string; onS
           <Pencil className="w-3.5 h-3.5" />
         </button>
       )}
+    </div>
+  );
+}
+
+// ── Multi-line extra info field ────────────────────────────────────────────
+function ExtraInfoField({ value, placeholder, onSave }: { value: string; placeholder: string; onSave: (v: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setDraft(value); }, [value]);
+
+  async function handleSave() {
+    if (draft === value) { setEditing(false); return; }
+    setSaving(true);
+    try { await onSave(draft); } finally { setSaving(false); setEditing(false); }
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-2">
+        <textarea
+          autoFocus
+          rows={3}
+          className="input w-full text-sm resize-none"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={placeholder}
+        />
+        <div className="flex gap-1.5">
+          <button onClick={handleSave} disabled={saving}
+            className="px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 text-xs font-medium hover:bg-blue-100 transition-colors flex items-center gap-1">
+            <Check className="w-3 h-3" />
+            Kaydet
+          </button>
+          <button onClick={() => { setDraft(value); setEditing(false); }}
+            className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 text-xs font-medium hover:bg-gray-200 transition-colors">
+            İptal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex-1">
+        {value || <span className="text-gray-400 italic">{placeholder}</span>}
+      </p>
+      <button onClick={() => setEditing(true)}
+        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -344,7 +397,15 @@ export default function AccountPage() {
     : "?";
 
   async function saveName(name: string) {
-    setUser((prev) => prev ? { ...prev, full_name: name } : prev);
+    const prev = user?.full_name;
+    setUser((u) => u ? { ...u, full_name: name } : u);
+    try {
+      await authApi.updateProfile({ full_name: name });
+      toast.success(t("account.fullName") + " güncellendi");
+    } catch {
+      setUser((u) => u ? { ...u, full_name: prev ?? "" } : u);
+      toast.error("İsim kaydedilemedi, tekrar dene.");
+    }
   }
 
   return (
@@ -524,18 +585,48 @@ export default function AccountPage() {
                     <LangSelector />
                   </div>
 
-                  {/* Bildirimler */}
-                  <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
-                    <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <Bell className="w-4 h-4 text-gray-500" />
+                </div>
+              </motion.div>
+
+              {/* ── Kişiselleştirme ── */}
+              <motion.div {...fadeUp(0.18)} className="card">
+                <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">{t("account.personalization")}</h2>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">{t("account.personalizationDesc")}</p>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <User className="w-4 h-4 text-gray-500" />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{t("account.notifications")}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{t("account.notificationsDesc")}</p>
+                    <div className="flex-1 min-w-0">
+                      <EditField
+                        label={t("account.occupation")}
+                        value={user?.occupation ?? ""}
+                        onSave={async (v) => {
+                          const prev = user?.occupation;
+                          setUser((u) => u ? { ...u, occupation: v } : u);
+                          try { await authApi.updateProfile({ occupation: v }); }
+                          catch { setUser((u) => u ? { ...u, occupation: prev ?? "" } : u); toast.error("Kaydedilemedi"); }
+                        }}
+                      />
                     </div>
-                    <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
-                      {t("common.comingSoon")}
-                    </span>
+                  </div>
+                  <div className="flex items-start gap-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
+                    <div className="w-9 h-9 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Brain className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-400 mb-1">{t("account.extraInfo")}</p>
+                      <ExtraInfoField
+                        value={user?.extra_info ?? ""}
+                        placeholder={t("account.extraInfoPlaceholder")}
+                        onSave={async (v) => {
+                          const prev = user?.extra_info;
+                          setUser((u) => u ? { ...u, extra_info: v } : u);
+                          try { await authApi.updateProfile({ extra_info: v }); }
+                          catch { setUser((u) => u ? { ...u, extra_info: prev ?? "" } : u); toast.error("Kaydedilemedi"); }
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </motion.div>

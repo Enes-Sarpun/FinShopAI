@@ -77,6 +77,12 @@ export const authApi = {
       method: "PATCH",
       body: JSON.stringify({ avatar_url }),
     }),
+
+  updateProfile: (data: { full_name?: string; occupation?: string; extra_info?: string }) =>
+    apiFetch("/api/auth/me/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const personalityApi = {
