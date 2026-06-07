@@ -340,7 +340,10 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
   const [history, setHistory] = useState<ChatHistory[]>([]);
 
   useEffect(() => {
-    chatApi.getHistory().then((h) => setHistory(h as ChatHistory[])).catch(() => {});
+    chatApi.getConversations().then((h) => {
+      const list = Array.isArray(h) ? h : (h as { history?: ChatHistory[] })?.history ?? [];
+      setHistory(list as ChatHistory[]);
+    }).catch(() => {});
   }, []);
 
   function handleDeleteHistoryItem(id: string) {
