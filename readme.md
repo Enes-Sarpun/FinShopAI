@@ -207,6 +207,13 @@ Bu proje 3 kişilik bir ekip tarafından, her üyenin hem frontend hem backend t
 
 ---
 
+## 💌 Test İçin Kullanıcı Giriş Bilgileri
+
+- **E-Posta:** deneme@test.com
+- **Şifre:** test1234
+  
+---
+
 ## 📄 Lisans
 
 Bu proje, eğitim ve yarışma amacıyla açık kaynak olarak geliştirilmiştir.
