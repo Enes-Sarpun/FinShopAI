@@ -22,7 +22,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://not-work-2026[a-zA-Z0-9\-]*\.vercel\.app|http://localhost:\d+",
+    allow_origin_regex=r"https://(finshopai|not-work-2026)[a-zA-Z0-9\-]*\.vercel\.app|http://localhost:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
