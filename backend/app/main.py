@@ -20,12 +20,17 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+origins = [
+    "https://fin-shop-ai.vercel.app",
+    "http://localhost:3000"  
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://(finshopai|not-work-2026)[a-zA-Z0-9\-]*\.vercel\.app|http://localhost:\d+",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,  
+    allow_credentials=True,  
+    allow_methods=["*"],    
+    allow_headers=["*"],     
 )
 
 from app.api.routes import personality, auth, budget, products, chat, security, watchlist
@@ -57,4 +62,4 @@ async def health_check():
     except Exception:
         pass
     overall = "ok" if all(checks.values()) else "degraded"
-    return {"status": overall, "service": "FinShop AI", "uptime_s": uptime, "checks": checks}
+    return {"status": overall, "service": "FinShop AI", "uptime_s": uptime, "checks": checks}
